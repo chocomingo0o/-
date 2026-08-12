@@ -17,17 +17,22 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install "pypdf[crypto]" pyinstaller
+        run: pip install "pypdf[crypto]" pyinstaller tkinterdnd2
 
       - name: Build GUI exe
-        run: pyinstaller --onefile --windowed --icon scripts/app_icon.ico --add-data "scripts/fonts;fonts" --name "PDF잠금해제" scripts/pdf_password_remover_gui.py
+        run: pyinstaller --onefile --windowed --icon scripts/app_icon.ico --add-data "scripts/fonts;fonts" --add-data "scripts/wordlists;wordlists" --collect-all tkinterdnd2 --name "PDF잠금해제" scripts/pdf_password_remover_gui.py
 
-      - name: Build CLI exe
+      - name: Build CLI (remove) exe
         run: pyinstaller --onefile --console --name "pdf-unlock-cli" scripts/remove_pdf_password.py
 
-      - name: Smoke test CLI exe
+      - name: Build CLI (recover) exe
+        run: pyinstaller --onefile --console --add-data "scripts/wordlists;wordlists" --name "pdf-recover-cli" scripts/pdf_recover_cli.py
+
+      - name: Smoke test CLI exes
         run: |
           & "dist\pdf-unlock-cli.exe" --help
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & "dist\pdf-recover-cli.exe" --help
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - uses: actions/upload-artifact@v4
