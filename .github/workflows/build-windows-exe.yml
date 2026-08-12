@@ -1,0 +1,37 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install "pypdf[crypto]" pyinstaller
+
+      - name: Build GUI exe
+        run: pyinstaller --onefile --windowed --icon scripts/app_icon.ico --name "PDF잠금해제" scripts/pdf_password_remover_gui.py
+
+      - name: Build CLI exe
+        run: pyinstaller --onefile --console --name "pdf-unlock-cli" scripts/remove_pdf_password.py
+
+      - name: Smoke test CLI exe
+        run: |
+          & "dist\pdf-unlock-cli.exe" --help
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-unlocker-windows
+          path: dist/*.exe
+          retention-days: 30

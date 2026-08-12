@@ -57,6 +57,11 @@ tkinter(파이썬 기본 포함)만 있으면 되고, 추가 설치는 필요 �
 
 ```bash
 pip install pyinstaller
-pyinstaller --onefile --windowed --name "PDF잠금해제" scripts/pdf_password_remover_gui.py
+pyinstaller --onefile --windowed --icon scripts/app_icon.ico --name "PDF잠금해제" scripts/pdf_password_remover_gui.py
 # 결과물: dist/PDF잠금해제.exe (Windows에서 빌드 시)
 ```
+
+GitHub Actions로도 빌드됩니다 — Actions 탭에서 **Build Windows EXE** 워크플로를
+실행하면 `pdf-unlocker-windows` 아티팩트로 exe가 업로드됩니다 (`v*` 태그 푸시 시 자동 실행).
+
+GUI는 레트로 파스텔 디자인 시스템(무광 · 1px 선 · 순검정 없음 · radius 8)을 따릅니다.
