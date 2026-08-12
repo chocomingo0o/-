@@ -13,12 +13,14 @@ scripts/remove_pdf_password.py의 핵심 로직을 그대로 사용하는 tkinte
 배포용 실행 파일(.exe) 만들기:
     pip install pyinstaller
     pyinstaller --onefile --windowed --icon scripts/app_icon.ico \
+        --add-data "scripts/fonts;fonts" \
         --name "PDF잠금해제" scripts/pdf_password_remover_gui.py
 """
 
 from __future__ import annotations
 
 import queue
+import sys
 import threading
 import tkinter as tk
 import tkinter.font as tkfont
@@ -65,9 +67,28 @@ DISABLED_FILL = "#ececf1"
 RADIUS = 8
 
 
+def load_bundled_fonts() -> None:
+    """exe에 내장된 Pretendard를 설치 없이 이 프로세스에서만 사용하도록 등록.
+
+    PyInstaller onefile은 sys._MEIPASS에 데이터를 풀어 놓는다. Windows에서는
+    AddFontResourceExW(FR_PRIVATE)로 프로세스 전용 폰트로 올린다. 다른 OS는
+    시스템에 설치된 폰트를 그대로 쓴다.
+    """
+    if sys.platform != "win32":
+        return
+    fonts_dir = Path(getattr(sys, "_MEIPASS", Path(__file__).parent)) / "fonts"
+    if not fonts_dir.is_dir():
+        return
+    import ctypes
+    FR_PRIVATE = 0x10
+    for ttf in fonts_dir.glob("*.ttf"):
+        ctypes.windll.gdi32.AddFontResourceExW(str(ttf), FR_PRIVATE, 0)
+
+
 def pick_korean_font(root: tk.Tk) -> str:
     families = set(tkfont.families(root))
-    for name in ("Malgun Gothic", "맑은 고딕", "NanumGothic", "Nanum Gothic",
+    for name in ("Pretendard", "Pretendard SemiBold",
+                 "Malgun Gothic", "맑은 고딕", "NanumGothic", "Nanum Gothic",
                  "Noto Sans CJK KR", "AppleGothic"):
         if name in families:
             return name
@@ -450,6 +471,7 @@ class PdfUnlockerApp:
 
 
 def main() -> None:
+    load_bundled_fonts()
     root = tk.Tk()
     PdfUnlockerApp(root)
     root.mainloop()

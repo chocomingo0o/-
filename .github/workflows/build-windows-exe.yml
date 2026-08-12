@@ -20,7 +20,7 @@ jobs:
         run: pip install "pypdf[crypto]" pyinstaller
 
       - name: Build GUI exe
-        run: pyinstaller --onefile --windowed --icon scripts/app_icon.ico --name "PDF잠금해제" scripts/pdf_password_remover_gui.py
+        run: pyinstaller --onefile --windowed --icon scripts/app_icon.ico --add-data "scripts/fonts;fonts" --name "PDF잠금해제" scripts/pdf_password_remover_gui.py
 
       - name: Build CLI exe
         run: pyinstaller --onefile --console --name "pdf-unlock-cli" scripts/remove_pdf_password.py
