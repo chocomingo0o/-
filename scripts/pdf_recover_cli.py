@@ -30,6 +30,15 @@ EXIT_NOT_FOUND = 2
 EXIT_NOT_ENCRYPTED = 3
 
 
+def _force_utf8_output() -> None:
+    """한글 출력이 영문 Windows 콘솔(cp1252)에서 깨지지 않도록 UTF-8로 전환."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")  # Python 3.7+
+        except Exception:
+            pass
+
+
 def bundled_wordlist() -> Path:
     return Path(getattr(sys, "_MEIPASS", Path(__file__).parent)) / "wordlists" / "common.txt"
 
@@ -50,6 +59,7 @@ def build_candidates(args) -> itertools.chain:
 
 
 def main(argv=None) -> int:
+    _force_utf8_output()
     p = argparse.ArgumentParser(description="PDF 비밀번호 복구 (본인 문서 전용).")
     p.add_argument("input", type=Path, help="잠긴 PDF")
     p.add_argument("-o", "--output", type=Path, help="해제본 저장 경로 (기본: <이름>_unlocked.pdf)")
