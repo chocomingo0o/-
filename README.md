@@ -39,3 +39,24 @@ The password can also come from the `PDF_PASSWORD` environment variable. The
 script never overwrites the input, and refuses to overwrite an existing output
 unless `--force` is given. Exit codes: `0` success, `1` error, `2` wrong
 password, `3` input was not encrypted.
+
+### GUI 프로그램
+
+터미널 대신 창에서 쓰고 싶다면 GUI 버전을 실행하세요
+([scripts/pdf_password_remover_gui.py](scripts/pdf_password_remover_gui.py)):
+
+```bash
+python scripts/pdf_password_remover_gui.py
+```
+
+파일을 선택하고 비밀번호를 입력하면 `<이름>_unlocked.pdf`로 저장됩니다.
+tkinter(파이썬 기본 포함)만 있으면 되고, 추가 설치는 필요 없습니다.
+리눅스에서 tkinter가 없다면 `sudo apt install python3-tk`로 설치하세요.
+
+배포용 실행 파일(더블클릭으로 실행되는 .exe)을 만들려면:
+
+```bash
+pip install pyinstaller
+pyinstaller --onefile --windowed --name "PDF잠금해제" scripts/pdf_password_remover_gui.py
+# 결과물: dist/PDF잠금해제.exe (Windows에서 빌드 시)
+```
