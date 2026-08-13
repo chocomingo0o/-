@@ -57,6 +57,9 @@ try:
 except Exception:
     _DND_AVAILABLE = False
 
+# 제작자 카피라이트 (창 하단 표시)
+APP_COPYRIGHT = "© 2026 ahn_6945. All rights reserved."
+
 # ---------------------------------------------------------------- 디자인 토큰
 PAGE = "#eceef8"
 CARD = "#fffdf2"
@@ -337,7 +340,10 @@ class PdfUnlockerApp:
                  text="본인이 소유했거나 해제 권한이 있는 문서에만 사용하세요.",
                  bg=CARD, fg=MUTED, font=self.f_tiny).pack(pady=(6, 2))
         tk.Label(card, text="R E T R O · P A S T E L · P D F  U N L O C K",
-                 bg=CARD, fg=MUTED, font=self.f_tiny).pack(pady=(0, 10))
+                 bg=CARD, fg=MUTED, font=self.f_tiny).pack(pady=(0, 2))
+        # 제작자 카피라이트
+        tk.Label(card, text=APP_COPYRIGHT,
+                 bg=CARD, fg=INK_SOFT, font=self.f_tiny).pack(pady=(0, 10))
 
         self.input_var.trace_add("write", self._on_input_changed)
         self._register_dnd()
