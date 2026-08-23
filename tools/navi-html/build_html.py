@@ -124,13 +124,9 @@ class SheetXml:
 # data=(시작, 끝|None=시트 끝), cols=(c1,c2), sticky=왼쪽 고정 열 수, note_row=활용 정보 행)
 CFG = [
     ("안내필독", "guide", {"doc": (2, 2, 36, 3)}),
-    ("검색", "search", {
-        "note": None, "grids": [(4, 2, 9, 28)],
-        "table": {"head": [12, 13], "skip": [14], "data": (15, None),
-                  "cols": (1, 35), "sticky": 4},
-        "caption": "저장 시점의 검색 결과 스냅숏입니다. 조건 검색(학생·모의고사·지역·계열)은 원본 엑셀에서 동작합니다."}),
+    ("검색", "search", {"searchapp": True}),
     ("등급변환표", "convert", {
-        "note_row": 2, "grids": [(10, 2, 11, 9)],
+        "note_row": 2, "gradechip": True, "grids": [(10, 2, 11, 9)],
         "table": {"head": [12, 13, 14], "skip": [], "data": (15, None),
                   "cols": (2, 18), "sticky": 1}}),
     ("백분위조견표(인문)", "convert", {"note_row": 2, "imgs": "drawing2"}),
@@ -157,7 +153,7 @@ CFG = [
         "table": {"group": 4, "head": [4, 5], "skip": [6], "data": (7, None),
                   "cols": (2, 22), "sticky": 3}}),
     ("수능최저", "adm", {
-        "note_row": 2, "grids": [(4, 2, 10, 25)],
+        "note_row": 2, "minpanel": True,
         "table": {"group": 12, "head": [13], "skip": [14], "data": (15, None),
                   "cols": (2, 25), "sticky": 2}}),
     ("종합전형", "adm", {
@@ -165,7 +161,7 @@ CFG = [
         "table": {"group": 4, "head": [5], "skip": [6], "data": (7, None),
                   "cols": (2, 21), "sticky": 2}}),
     ("논술", "adm", {
-        "note_row": 2, "grids": [(4, 2, 10, 30)],
+        "note_row": 2, "minpanel": True,
         "table": {"group": 12, "head": [13], "skip": [14], "data": (15, None),
                   "cols": (2, 45), "sticky": 2}}),
     ("전형일정", "adm", {
@@ -320,6 +316,247 @@ def build_table(sheet_vals, sx, tcfg, last_row):
             "names": header_names}
 
 
+# ---------------------------------------------------------------- 검색 엔진 추출
+CALC_REF = {"$A$2": "kor", "$B$2": "mat", "$C$2": "t1", "$D$2": "t2",
+            "$F$2": "tmax", "$G$2": "tavg"}
+
+
+def build_calc(zf, wb):
+    """25점수계산기 시트의 대학별 백분위 산출식을 AST로 컴파일한다.
+    (원본 캐시값 6,442행 전수 대조로 검증된 로직)"""
+    s = zf.read("xl/worksheets/sheet23.xml").decode("utf-8")
+    s = re.sub(r"<c [^>]*/>", "", s)  # 자기닫힘 셀이 다음 셀 수식을 삼키지 않게
+    cells, shared = {}, {}
+    for m in re.finditer(r'<c r="([A-Z]+)(\d+)"[^>]*?>(.*?)</c>', s):
+        col, row, inner = m.group(1), int(m.group(2)), m.group(3)
+        fm = re.search(r"<f([^>]*)>(.*?)</f>", inner)
+        fe = re.search(r"<f([^>]*)/>", inner)
+        if fm:
+            si = re.search(r'si="(\d+)"', fm.group(1))
+            if si and fm.group(2):
+                shared[si.group(1)] = (col, row, fm.group(2))
+            cells[(col, row)] = (fm.group(2) or None, si.group(1) if si else None)
+        elif fe:
+            si = re.search(r'si="(\d+)"', fe.group(1))
+            cells[(col, row)] = (None, si.group(1) if si else None)
+
+    def resolve(col, row):
+        v = cells.get((col, row))
+        if not v:
+            return None
+        text, si = v
+        if text:
+            return text
+        if si and si in shared:
+            scol, srow, stext = shared[si]
+            drow = row - srow
+
+            def rep(m):
+                cm = re.match(r"(\$?)([A-Z]+)(\$?)(\d+)", m.group(0))
+                cpre, c, rpre, r = cm.groups()
+                return f"{cpre}{c}{rpre}{int(r) if rpre else int(r) + drow}"
+            return re.sub(r"\$?[A-Z]+\$?\d+", rep, stext)
+        return None
+
+    def parse_ref(tok):
+        tok = tok.strip()
+        if tok in CALC_REF:
+            return {"r": CALC_REF[tok]}
+        m = re.fullmatch(r"\$?K\$?(\d+)", tok)
+        if m:
+            n = int(m.group(1))
+            if resolve("K", n) is None:  # 수식 없는 K = 배열 문맥에서 0
+                return {"c": 0}
+            return {"e": n}
+        raise ValueError("ref? " + tok)
+
+    def compile_formula(f):
+        if f is None:
+            return None
+        toks, i = [], 0
+        while i < len(f):
+            ch = f[i]
+            if ch in "(),":
+                toks.append(ch); i += 1
+            elif f[i:i + 5].upper() == "LARGE":
+                toks.append("LARGE"); i += 5
+            elif f[i:i + 3].upper() in ("MAX", "MIN"):
+                toks.append(f[i:i + 3].upper()); i += 3
+            else:
+                m = re.match(r"\$?[A-Z]+\$?\d+(:\$?[A-Z]+\$?\d+)?|\d+", f[i:])
+                if not m:
+                    raise ValueError(f"tok? {f[i:]}")
+                toks.append(m.group(0)); i += len(m.group(0))
+        pos = [0]
+
+        def peek():
+            return toks[pos[0]] if pos[0] < len(toks) else None
+
+        def eat(t=None):
+            v = toks[pos[0]]; pos[0] += 1
+            if t and v != t:
+                raise ValueError(f"expect {t} got {v} in {f}")
+            return v
+
+        def expr():
+            t = peek()
+            if t == "LARGE":
+                eat(); eat("(")
+                if peek() == "(":
+                    eat("(")
+                    args = [expr()]
+                    while peek() == ",":
+                        eat(); args.append(expr())
+                    eat(")")
+                else:
+                    rng = eat()
+                    assert rng == "$A$2:$D$2", rng
+                    args = [{"r": "kor"}, {"r": "mat"}, {"r": "t1"}, {"r": "t2"}]
+                eat(",")
+                k = int(eat()); eat(")")
+                return {"lg": args, "k": k}
+            if t in ("MAX", "MIN"):
+                op = eat(); eat("(")
+                args = [expr()]
+                while peek() == ",":
+                    eat(); args.append(expr())
+                eat(")")
+                return {("mx" if op == "MAX" else "mn"): args}
+            return parse_ref(eat())
+        node = expr()
+        if pos[0] != len(toks):
+            raise ValueError(f"trailing in {f}")
+        return node
+
+    ws = wb["25점수계산기"]
+    grid = {}
+    for r, row in enumerate(ws.iter_rows(min_row=1, max_row=572, max_col=33), 1):
+        for c, cell in enumerate(row, 1):
+            grid[(r, c)] = cell.value
+
+    def gv(row, letters):
+        return grid.get((row, col_index(letters)))
+
+    codes, eng_rows = {}, set()
+    for r in range(5, 573):
+        a = gv(r, "A")
+        if a is None:
+            continue
+        code = str(int(a)) if isinstance(a, (int, float)) and float(a) == int(a) else str(a)
+        exprs = []
+        for col in ["X", "Y", "Z", "AA"]:
+            ast = compile_formula(resolve(col, r))
+            exprs.append(ast)
+
+            def collect(n):
+                if not n:
+                    return
+                if "e" in n:
+                    eng_rows.add(n["e"])
+                for k in ("lg", "mx", "mn"):
+                    if k in n:
+                        for x in n[k]:
+                            collect(x)
+            collect(ast)
+        ratios = []
+        for col in ["AB", "AC", "AD", "AE"]:
+            v = gv(r, col)
+            ratios.append(float(v) if v not in (None, "") else 0.0)
+        codes[code] = {"x": exprs, "w": ratios}
+    eng = {str(r): [gv(r, c) for c in ["B", "C", "D", "E", "F", "G", "H", "I", "J"]]
+           for r in eng_rows}
+    return {"codes": codes, "eng": eng}
+
+
+def extract_students(wb):
+    """내신 + 월별 모의고사 시트에서 학생별 구조화 데이터를 뽑는다."""
+    students = {}
+
+    def key_of(g, b, n):
+        return f"{g}-{b}-{n}"
+
+    ws = wb["내신"]
+    # 월별 시트 열: J국백 K국등 / O수백 P수등 / R영등 F한국사등 / S·V·W 탐1 / X·AA·AB 탐2
+    for row in ws.iter_rows(min_row=6, max_col=28):
+        g, b, n, name = (row[0].value, row[1].value, row[2].value, row[3].value)
+        if name in (None, ""):
+            continue
+        vals = [row[i].value for i in range(4, 28)]
+        naesin = {}
+        for gi, gname in enumerate(["전교과", "국수영사과", "국수영사", "국수영과"]):
+            seg = vals[gi * 6:gi * 6 + 6]
+            naesin[gname] = [round(v, 2) if isinstance(v, (int, float)) else None for v in seg]
+        students[key_of(g, b, n)] = {"g": g, "b": b, "n": n, "name": str(name),
+                                     "naesin": naesin, "months": {}}
+    for mn in ["3월", "5월", "6월", "7월", "9월", "10월", "11월"]:
+        ws = wb[mn]
+        for row in ws.iter_rows(min_row=6, max_col=31):
+            g, b, n, name = (row[0].value, row[1].value, row[2].value, row[3].value)
+            if name in (None, ""):
+                continue
+            k = key_of(g, b, n)
+            if k not in students:
+                students[k] = {"g": g, "b": b, "n": n, "name": str(name),
+                               "naesin": {}, "months": {}}
+            def num(idx):
+                v = row[idx - 1].value
+                return v if isinstance(v, (int, float)) else None
+            def txt(idx):
+                v = row[idx - 1].value
+                return str(v) if v not in (None, "") else None
+            rec = {"kor": [num(10), num(11)], "mat": [num(15), num(16)],
+                   "eng": num(18), "hist": num(6),
+                   "t1": [txt(19), num(22), num(23)], "t2": [txt(24), num(27), num(28)]}
+            if any(v is not None for v in
+                   [rec["kor"][0], rec["mat"][0], rec["eng"], rec["t1"][1], rec["t2"][1]]):
+                students[k]["months"][mn] = rec
+    order = sorted(students.values(), key=lambda s: (s.get("g") or 0, s.get("b") or 0, s.get("n") or 0))
+    return order
+
+
+def extract_unidb(wb):
+    """숨김 data 시트 → 검색용 대학 DB (문자열 테이블 인코딩)."""
+    ws = wb["data"]
+    strings, sidx = [], {}
+
+    def S(v):
+        if v is None:
+            v = ""
+        v = str(v)
+        if v not in sidx:
+            sidx[v] = len(strings)
+            strings.append(v)
+        return sidx[v]
+
+    cols = ["A", "B", "C", "D", "E", "F", "G", "H", "L",
+            "O", "P", "Q", "R", "S", "U", "V", "W", "X", "Y",
+            "AA", "AB", "AC", "AD", "AE", "AG", "AH", "AI", "AJ", "AK",
+            "AM", "AN", "AO", "AP", "AQ", "AT", "AU", "AV", "AW"]
+    idxs = [col_index(c) - 1 for c in cols]
+    rows = []
+    for row in ws.iter_rows(min_row=2, max_row=6443, max_col=55):
+        vals = [row[i].value for i in idxs]
+        if all(v in (None, "") for v in vals[:8]):
+            continue
+        enc = []
+        for c, v in zip(cols, vals):
+            if c == "AT":  # 정시백분위: 숫자 or null
+                enc.append(round(float(v), 5) if isinstance(v, (int, float)) else None)
+            elif c == "AV":  # 정시코드 정규화
+                if isinstance(v, (int, float)) and float(v) == int(v):
+                    enc.append(S(str(int(v))))
+                else:
+                    enc.append(S(v))
+            elif c in ("P", "Q", "R", "S", "V", "W", "X", "Y", "AB", "AC", "AD", "AE",
+                       "AH", "AI", "AJ", "AK", "AN", "AO", "AP", "AQ"):
+                # 등급 컷: 숫자 or null (문자열 테이블과 섞지 않는다)
+                enc.append(round(float(v), 2) if isinstance(v, (int, float)) else None)
+            else:
+                enc.append(S(v))
+        rows.append(enc)
+    return {"cols": cols, "strings": strings, "rows": rows}
+
+
 def textbox_titles(zf, drawing):
     s = zf.read(f"xl/drawings/{drawing}.xml").decode("utf-8")
     boxes = []
@@ -400,6 +637,12 @@ def main():
             note = vals.get((nr, 2), ("", False))[0]
             if note:
                 blocks.append({"t": "note", "text": note})
+        if cfg.get("searchapp"):
+            blocks.append({"t": "searchapp"})
+        if cfg.get("gradechip"):
+            blocks.append({"t": "gradechip"})
+        if cfg.get("minpanel"):
+            blocks.append({"t": "minpanel"})
         if "doc" in cfg:
             r1, c1, r2, c2 = cfg["doc"]
             lines = []
@@ -422,11 +665,21 @@ def main():
         sheets_out.append({"name": name, "group": group, "blocks": blocks})
     wb.close()
 
+    print("검색 엔진 추출", file=sys.stderr)
+    wb2 = openpyxl.load_workbook(args.input, read_only=True, data_only=True)
+    calc = build_calc(zf, wb2)
+    students = extract_students(wb2)
+    unidb = extract_unidb(wb2)
+    wb2.close()
+
     tpl = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "template.html"),
                encoding="utf-8").read()
     payload = json.dumps({"sheets": sheets_out, "groups": GROUPS},
                          ensure_ascii=False, separators=(",", ":"))
+    search_payload = json.dumps({"calc": calc, "students": students, "uni": unidb},
+                                ensure_ascii=False, separators=(",", ":"))
     out = tpl.replace("/*__DATA__*/null", payload)
+    out = out.replace("/*__SEARCH__*/null", search_payload)
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(out)
     print(f"완료: {args.output} ({os.path.getsize(args.output)/1e6:.1f}MB)", file=sys.stderr)
