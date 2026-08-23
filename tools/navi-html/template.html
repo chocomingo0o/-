@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NAVI 수시상담</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Gowun+Batang:wght@700&display=swap">
+<style>
+:root{
+  --paper:#F5F6F8; --panel:#FFFFFF; --panel2:#EDF0F4; --ink:#1E2532; --muted:#667080;
+  --line:#E2E6ED; --line2:#CBD2DC; --accent:#0B77A0; --accent-ink:#085A7A;
+  --accent-soft:#E3F0F5; --head:#F0F3F7; --zebra:#F7F9FB; --hover:#EDF4F8;
+  --shadow:0 1px 3px rgba(20,30,50,.08);
+}
+:root:not([data-theme="light"]){}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#12161E; --panel:#1A202B; --panel2:#232B38; --ink:#E6EAF1; --muted:#96A0B0;
+    --line:#2A3140; --line2:#3A4354; --accent:#4FAECF; --accent-ink:#7CC6DF;
+    --accent-soft:#173341; --head:#20293646; --head:#202936; --zebra:#1E2530; --hover:#243240;
+    --shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#12161E; --panel:#1A202B; --panel2:#232B38; --ink:#E6EAF1; --muted:#96A0B0;
+  --line:#2A3140; --line2:#3A4354; --accent:#4FAECF; --accent-ink:#7CC6DF;
+  --accent-soft:#173341; --head:#202936; --zebra:#1E2530; --hover:#243240;
+  --shadow:0 1px 3px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif;
+  font-size:14px; line-height:1.55;
+}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+/* ---------- 상단 바 ---------- */
+header.app{
+  position:sticky; top:0; z-index:50; background:var(--panel);
+  border-bottom:1px solid var(--line); box-shadow:var(--shadow);
+}
+.bar{display:flex; align-items:center; gap:14px; padding:10px 18px 6px}
+.bar h1{
+  font-family:'Gowun Batang','Noto Sans KR',serif; font-size:19px; font-weight:700;
+  margin:0; letter-spacing:.5px;
+}
+.bar h1 em{font-style:normal; color:var(--accent-ink)}
+.chip{
+  font-size:11.5px; color:var(--muted); border:1px solid var(--line2);
+  border-radius:999px; padding:2px 10px; letter-spacing:.4px; white-space:nowrap;
+}
+.bar .sp{flex:1}
+#themeBtn{
+  font-size:11.5px; color:var(--muted); border:1px solid var(--line2);
+  border-radius:999px; padding:2px 10px;
+}
+#themeBtn:hover{color:var(--ink); border-color:var(--accent)}
+/* ---------- 탭 ---------- */
+nav.tabs{display:flex; gap:2px; overflow-x:auto; padding:0 12px; scrollbar-width:thin}
+nav.tabs .gsep{width:1px; background:var(--line); margin:6px 6px}
+nav.tabs button{
+  display:flex; align-items:center; gap:6px; padding:7px 11px 6px; font-size:13px;
+  color:var(--muted); border-bottom:2.5px solid transparent; white-space:nowrap;
+  border-radius:6px 6px 0 0;
+}
+nav.tabs button .dot{width:7px;height:7px;border-radius:50%;flex:none}
+nav.tabs button:hover{background:var(--panel2); color:var(--ink)}
+nav.tabs button[aria-selected="true"]{color:var(--ink); font-weight:700; border-bottom-color:var(--tabc)}
+nav.tabs button:focus-visible{outline:2px solid var(--accent); outline-offset:-2px}
+/* ---------- 본문 ---------- */
+main{padding:16px 18px 40px; display:flex; flex-direction:column; gap:14px}
+.panel{display:none; flex-direction:column; gap:14px}
+.panel.on{display:flex}
+h2.sheet{
+  margin:2px 0 0; font-size:16px; font-weight:700; display:flex; align-items:center; gap:8px;
+}
+h2.sheet .gtag{font-size:11px; font-weight:500; color:var(--muted); letter-spacing:.1em}
+h2.sheet .dot{width:8px;height:8px;border-radius:50%}
+/* 블록 공통 */
+.card{background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow)}
+details.note{padding:0; overflow:hidden}
+details.note summary{
+  cursor:pointer; padding:9px 14px; font-size:12.5px; font-weight:700; color:var(--muted);
+  list-style:none; display:flex; gap:8px; align-items:center;
+}
+details.note summary::before{content:"▸"; transition:transform .15s}
+details.note[open] summary::before{transform:rotate(90deg)}
+@media (prefers-reduced-motion: reduce){ details.note summary::before{transition:none} }
+details.note .body{
+  padding:2px 16px 12px; font-size:13px; color:var(--muted); white-space:pre-line;
+  border-top:1px dashed var(--line); max-width:75em;
+}
+p.cap{margin:0; font-size:12.5px; color:var(--muted); padding:0 2px}
+p.cap::before{content:"ⓘ "; color:var(--accent)}
+/* 문서(안내필독) */
+article.doc{padding:20px 26px 26px; max-width:62em}
+article.doc h3{
+  font-size:14.5px; margin:20px 0 6px; padding-left:10px;
+  border-left:3px solid var(--accent); color:var(--accent-ink);
+}
+article.doc p{margin:5px 0; white-space:pre-line}
+article.doc p.tip{color:var(--muted); font-size:13px}
+/* 소형 그리드 */
+.gridwrap{overflow-x:auto; padding:12px}
+table.grid{border-collapse:collapse; font-size:12.5px}
+table.grid td{
+  border:1px solid var(--line); padding:4px 9px; white-space:pre-line; min-width:44px;
+  font-variant-numeric:tabular-nums;
+}
+table.grid td.num{text-align:right}
+table.grid td.hd{background:var(--head); font-weight:500}
+table.grid td:empty{border-color:transparent}
+/* 이미지 */
+.imgs{display:flex; flex-direction:column; gap:18px; padding:16px}
+.imgs figure{margin:0}
+.imgs figcaption{font-size:13px; font-weight:700; margin:0 0 8px; color:var(--accent-ink)}
+.imgs img{max-width:100%; border:1px solid var(--line); border-radius:6px; background:#fff}
+/* ---------- 데이터 표 ---------- */
+.tbl .bar2{
+  display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px 12px;
+  border-bottom:1px solid var(--line);
+}
+.tbl .bar2 .ttl{font-size:13.5px; font-weight:700; margin-right:4px}
+.tbl input[type=search]{
+  font:inherit; font-size:12.5px; color:var(--ink); background:var(--paper);
+  border:1px solid var(--line2); border-radius:7px; padding:5px 10px; width:220px;
+}
+.tbl input[type=search]:focus{outline:2px solid var(--accent); outline-offset:-1px}
+.tbl select{
+  font:inherit; font-size:12px; color:var(--ink); background:var(--paper);
+  border:1px solid var(--line2); border-radius:7px; padding:4px 6px; max-width:170px;
+}
+.tbl .cnt{margin-left:auto; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums}
+.tbl .reset{font-size:12px; color:var(--accent-ink); padding:4px 8px; border-radius:6px}
+.tbl .reset:hover{background:var(--accent-soft)}
+.scroll{overflow:auto; max-height:calc(100vh - 210px); border-radius:0 0 10px 10px}
+table.data{border-collapse:separate; border-spacing:0; font-size:12.5px; table-layout:fixed}
+table.data th, table.data td{
+  border-bottom:1px solid var(--line); border-right:1px solid var(--line);
+  padding:4px 8px; vertical-align:top; overflow-wrap:break-word; white-space:pre-line;
+}
+table.data thead th{
+  position:sticky; background:var(--head); font-weight:700; text-align:center;
+  font-size:12px; z-index:3; border-bottom-color:var(--line2);
+}
+table.data thead tr:nth-child(1) th{top:0}
+table.data thead th.grp{color:var(--accent-ink); letter-spacing:.06em; font-size:11.5px}
+table.data td.num{text-align:right; font-variant-numeric:tabular-nums}
+table.data tbody tr:nth-child(even) td{background:var(--zebra)}
+table.data tbody tr:nth-child(odd) td{background:var(--panel)}
+table.data tbody tr:hover td{background:var(--hover)}
+table.data .stick{position:sticky; z-index:2}
+table.data thead .stick{z-index:4}
+.sentinel{height:8px}
+mark{background:transparent; color:inherit; font-weight:700; text-decoration:underline;
+  text-decoration-color:var(--accent); text-underline-offset:2px}
+footer{padding:18px; font-size:11.5px; color:var(--muted); text-align:center}
+@media (max-width:700px){
+  .bar{flex-wrap:wrap} .tbl input[type=search]{width:140px}
+  .scroll{max-height:calc(100vh - 150px)}
+}
+</style>
+</head>
+<body>
+<header class="app">
+  <div class="bar">
+    <h1><em>NAVI</em> 수시상담</h1>
+    <span class="chip">2026학년도 · 기준 26.08.14</span>
+    <span class="sp"></span>
+    <button id="themeBtn" title="테마 전환">테마: 자동</button>
+  </div>
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+</header>
+<main id="main"></main>
+<footer>원본 엑셀 워크북(수시 NAVI, 26.08.14 기준)에서 변환된 열람용 문서입니다 ·
+조건 검색·성적 입력 등 계산 기능은 원본 엑셀에서 동작합니다</footer>
+<script>
+const DATA = /*__DATA__*/null;
+const CHUNK = 250;
+const $ = (s, el) => (el || document).querySelector(s);
+
+/* ---------- 테마 ---------- */
+(() => {
+  const btn = $('#themeBtn');
+  const seq = ['auto', 'light', 'dark'];
+  const label = {auto: '자동', light: '라이트', dark: '다크'};
+  let cur = 'auto';
+  try { cur = localStorage.getItem('navi-theme') || 'auto'; } catch (e) {}
+  const apply = () => {
+    if (cur === 'auto') delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = cur;
+    btn.textContent = '테마: ' + label[cur];
+  };
+  btn.addEventListener('click', () => {
+    cur = seq[(seq.indexOf(cur) + 1) % 3];
+    try { localStorage.setItem('navi-theme', cur); } catch (e) {}
+    apply();
+  });
+  apply();
+})();
+
+/* ---------- 탭 ---------- */
+const tabsEl = $('#tabs'), mainEl = $('#main');
+const built = new Set();
+let prevGroup = null;
+DATA.sheets.forEach((sh, i) => {
+  const [gname, gcolor] = DATA.groups[sh.group];
+  if (prevGroup !== null && prevGroup !== sh.group) {
+    const sep = document.createElement('div'); sep.className = 'gsep'; tabsEl.appendChild(sep);
+  }
+  prevGroup = sh.group;
+  const b = document.createElement('button');
+  b.role = 'tab'; b.id = 'tab' + i; b.setAttribute('aria-selected', i === 0);
+  b.style.setProperty('--tabc', gcolor);
+  b.innerHTML = `<span class="dot" style="background:${gcolor}"></span>${sh.name}`;
+  b.title = gname;
+  b.addEventListener('click', () => select(i));
+  tabsEl.appendChild(b);
+  const p = document.createElement('section');
+  p.className = 'panel'; p.id = 'panel' + i; p.role = 'tabpanel';
+  mainEl.appendChild(p);
+});
+function select(i) {
+  document.querySelectorAll('nav.tabs button').forEach((b, j) =>
+    b.setAttribute('aria-selected', j === i));
+  document.querySelectorAll('.panel').forEach((p, j) => p.classList.toggle('on', j === i));
+  if (!built.has(i)) { built.add(i); buildSheet(i); }
+}
+
+/* ---------- 시트 빌드 ---------- */
+function buildSheet(i) {
+  const sh = DATA.sheets[i], panel = $('#panel' + i);
+  const [gname, gcolor] = DATA.groups[sh.group];
+  const h = document.createElement('h2');
+  h.className = 'sheet';
+  h.innerHTML = `<span class="dot" style="background:${gcolor}"></span>${sh.name}
+    <span class="gtag">${gname}</span>`;
+  panel.appendChild(h);
+  sh.blocks.forEach(bl => panel.appendChild(buildBlock(bl)));
+}
+function buildBlock(bl) {
+  if (bl.t === 'note') {
+    const d = document.createElement('details');
+    d.className = 'note card';
+    d.innerHTML = '<summary>시트 활용 정보</summary><div class="body"></div>';
+    $('.body', d).textContent = bl.text;
+    return d;
+  }
+  if (bl.t === 'doc') {
+    const a = document.createElement('article');
+    a.className = 'doc card';
+    bl.lines.forEach(line => {
+      const t = line.trim();
+      let el;
+      if (/^[0-9]+\./.test(t) || t.startsWith('※') || t.startsWith('★') || t.startsWith('-')) {
+        el = document.createElement('p');
+        if (t.startsWith('※') || t.startsWith('★')) el.className = 'tip';
+      } else if (t.length < 40) {
+        el = document.createElement('h3');
+      } else {
+        el = document.createElement('p');
+      }
+      el.textContent = line;
+      a.appendChild(el);
+    });
+    return a;
+  }
+  if (bl.t === 'grid') {
+    const d = document.createElement('div');
+    d.className = 'card';
+    d.innerHTML = bl.html;
+    return d;
+  }
+  if (bl.t === 'cap') {
+    const p = document.createElement('p');
+    p.className = 'cap'; p.textContent = bl.text;
+    return p;
+  }
+  if (bl.t === 'imgs') {
+    const d = document.createElement('div');
+    d.className = 'imgs card';
+    bl.items.forEach(it => {
+      const f = document.createElement('figure');
+      if (it.title) {
+        const c = document.createElement('figcaption'); c.textContent = it.title; f.appendChild(c);
+      }
+      const img = document.createElement('img');
+      img.loading = 'lazy'; img.src = it.src; img.alt = it.title || '차트';
+      f.appendChild(img);
+      d.appendChild(f);
+    });
+    return d;
+  }
+  return buildTable(bl);
+}
+
+/* ---------- 데이터 표 ---------- */
+function buildTable(bl) {
+  const wrap = document.createElement('div');
+  wrap.className = 'tbl card';
+  const bar = document.createElement('div');
+  bar.className = 'bar2';
+  if (bl.title) {
+    const t = document.createElement('span'); t.className = 'ttl'; t.textContent = bl.title;
+    bar.appendChild(t);
+  }
+  const inp = document.createElement('input');
+  inp.type = 'search'; inp.placeholder = '표 내 검색 (대학·전형·모집단위…)';
+  bar.appendChild(inp);
+  const sels = [];
+  bl.filters.forEach(ci => {
+    const s = document.createElement('select');
+    const uniq = [...new Set(bl.rows.map(r => r[ci]).filter(Boolean))].sort((a, b) =>
+      String(a).localeCompare(String(b), 'ko'));
+    s.innerHTML = `<option value="">${bl.names[ci]}: 전체</option>` +
+      uniq.map(u => `<option>${String(u).replace(/&/g,'&amp;').replace(/</g,'&lt;')}</option>`).join('');
+    s.dataset.ci = ci;
+    bar.appendChild(s); sels.push(s);
+  });
+  const reset = document.createElement('button');
+  reset.className = 'reset'; reset.textContent = '초기화';
+  bar.appendChild(reset);
+  const cnt = document.createElement('span');
+  cnt.className = 'cnt';
+  bar.appendChild(cnt);
+  wrap.appendChild(bar);
+
+  const scroll = document.createElement('div');
+  scroll.className = 'scroll';
+  const table = document.createElement('table');
+  table.className = 'data';
+  const total = bl.widths.reduce((a, b) => a + b, 0);
+  table.style.width = total + 'px';
+  table.innerHTML = `<colgroup>${bl.widths.map(w => `<col style="width:${w}px">`).join('')}</colgroup>
+    <thead>${bl.head}</thead><tbody></tbody>`;
+  scroll.appendChild(table);
+  const sentinel = document.createElement('div');
+  sentinel.className = 'sentinel';
+  scroll.appendChild(sentinel);
+  wrap.appendChild(scroll);
+
+  // 머리글 2행 sticky 오프셋
+  requestAnimationFrame(() => {
+    const trs = table.tHead.rows;
+    if (trs.length > 1) {
+      const h0 = trs[0].getBoundingClientRect().height;
+      for (let r = 1; r < trs.length; r++)
+        for (const th of trs[r].cells) th.style.top = (h0 * r) + 'px';
+    }
+    // 왼쪽 고정 열
+    if (bl.sticky > 0) {
+      let off = 0;
+      const offs = bl.widths.slice(0, bl.sticky).map(w => { const o = off; off += w; return o; });
+      const applyRow = (tr, isHead) => {
+        let ci = 0;
+        for (const cell of tr.cells) {
+          const span = cell.colSpan || 1;
+          if (ci < bl.sticky) {
+            cell.classList.add('stick');
+            cell.style.left = offs[ci] + 'px';
+            if (!isHead) cell.style.background = 'inherit';
+          }
+          ci += span;
+          if (ci >= bl.sticky) break;
+        }
+      };
+      for (const tr of table.tHead.rows) applyRow(tr, true);
+      table.dataset.sticky = bl.sticky;
+    }
+  });
+
+  // 상태
+  const lower = bl.rows.map(r => r.join('').toLowerCase());
+  let view = bl.rows.map((_, idx) => idx);
+  let drawn = 0;
+  const tbody = table.tBodies[0];
+  const fmtN = n => n.toLocaleString('ko-KR');
+  function renderChunk() {
+    const frag = document.createDocumentFragment();
+    const end = Math.min(drawn + CHUNK, view.length);
+    for (let k = drawn; k < end; k++) {
+      const row = bl.rows[view[k]];
+      const tr = document.createElement('tr');
+      for (let c = 0; c < row.length; c++) {
+        const td = document.createElement('td');
+        if (bl.aligns[c]) td.className = 'num';
+        td.textContent = row[c];
+        if (bl.sticky > 0 && c < bl.sticky) {
+          td.classList.add('stick');
+          td.style.left = bl.widths.slice(0, c).reduce((a, b) => a + b, 0) + 'px';
+        }
+        tr.appendChild(td);
+      }
+      frag.appendChild(tr);
+    }
+    drawn = end;
+    tbody.appendChild(frag);
+    cnt.textContent = `${fmtN(view.length)}행` +
+      (view.length < bl.rows.length ? ` (전체 ${fmtN(bl.rows.length)}행)` : '') +
+      (drawn < view.length ? ` · ${fmtN(drawn)}행 로드됨` : '');
+  }
+  const io = new IntersectionObserver(es => {
+    if (es[0].isIntersecting && drawn < view.length) renderChunk();
+  }, {root: scroll, rootMargin: '600px'});
+  io.observe(sentinel);
+
+  function applyFilter() {
+    const q = inp.value.trim().toLowerCase();
+    const conds = sels.filter(s => s.value).map(s => [Number(s.dataset.ci), s.value]);
+    view = [];
+    for (let idx = 0; idx < bl.rows.length; idx++) {
+      if (q && !lower[idx].includes(q)) continue;
+      let ok = true;
+      for (const [ci, v] of conds) if (bl.rows[idx][ci] !== v) { ok = false; break; }
+      if (ok) view.push(idx);
+    }
+    tbody.textContent = '';
+    drawn = 0;
+    scroll.scrollTop = 0;
+    renderChunk();
+  }
+  let deb;
+  inp.addEventListener('input', () => { clearTimeout(deb); deb = setTimeout(applyFilter, 200); });
+  sels.forEach(s => s.addEventListener('change', applyFilter));
+  reset.addEventListener('click', () => {
+    inp.value = ''; sels.forEach(s => s.value = ''); applyFilter();
+  });
+  renderChunk();
+  return wrap;
+}
+
+select(0);
+</script>
+</body>
+</html>
