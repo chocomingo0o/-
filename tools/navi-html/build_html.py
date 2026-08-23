@@ -589,11 +589,32 @@ def build_imgs(zf, drawing, images_dir):
             png = os.path.join(images_dir, name + ".png")
             if not os.path.exists(png):
                 continue
-            with open(png, "rb") as f:
-                b64 = base64.b64encode(f.read()).decode()
-            items.append({"title": title, "src": f"data:image/png;base64,{b64}"})
+            items.append({"title": title, "src": _img_data_uri(png)})
             title = None
     return {"t": "imgs", "items": items}
+
+
+def _img_data_uri(png):
+    """흰 여백을 잘라낸 PNG를 data URI로 만든다 (Pillow 없으면 원본 그대로)."""
+    try:
+        from PIL import Image, ImageChops
+        import io
+        img = Image.open(png).convert("RGB")
+        bg = Image.new("RGB", img.size, (255, 255, 255))
+        bbox = ImageChops.difference(img, bg).getbbox()
+        if bbox:
+            pad = 12
+            l, t, r, b = bbox
+            box = (max(0, l - pad), max(0, t - pad),
+                   min(img.width, r + pad), min(img.height, b + pad))
+            img = img.crop(box)
+        buf = io.BytesIO()
+        img.save(buf, "PNG", optimize=True)
+        data = buf.getvalue()
+    except ImportError:
+        with open(png, "rb") as f:
+            data = f.read()
+    return "data:image/png;base64," + base64.b64encode(data).decode()
 
 
 def main():

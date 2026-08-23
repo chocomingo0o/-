@@ -5,21 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NAVI 수시상담</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Gowun+Batang:wght@700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&display=swap">
 <style>
 :root{
-  --paper:#F5F6F8; --panel:#FFFFFF; --panel2:#EDF0F4; --ink:#1E2532; --muted:#667080;
-  --line:#E2E6ED; --line2:#CBD2DC; --accent:#0B77A0; --accent-ink:#085A7A;
-  --accent-soft:#E3F0F5; --head:#F0F3F7; --zebra:#F7F9FB; --hover:#EAF3F8;
-  --good:#1E7B4D; --bad:#B3372E; --stu:#EBF4F8;
-  --shadow:0 1px 3px rgba(20,30,50,.08);
+  --font:'Pretendard Variable',Pretendard;
+  --paper:#F4F6F8; --panel:#FFFFFF; --panel2:#EDF0F4; --ink:#1E2532; --muted:#66707F;
+  --line:#E2E6ED; --line2:#C8D0DA; --accent:#0B77A0; --accent-ink:#085A7A;
+  --accent-soft:#E3F0F5; --head:#EFF3F7; --zebra:#F7F9FB; --hover:#E9F3F8;
+  --good:#1E7B4D; --bad:#B3372E; --stu:#EAF3F8;
+  --shadow:0 1px 3px rgba(20,30,50,.07);
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --paper:#12161E; --panel:#1A202B; --panel2:#232B38; --ink:#E6EAF1; --muted:#96A0B0;
     --line:#2A3140; --line2:#3A4354; --accent:#4FAECF; --accent-ink:#7CC6DF;
     --accent-soft:#173341; --head:#202936; --zebra:#1E2530; --hover:#243240;
-    --good:#5CC290; --bad:#E48A82; --stu:#182734;
+    --good:#5CC290; --bad:#E48A82; --stu:#17222D;
     --shadow:0 1px 3px rgba(0,0,0,.4);
   }
 }
@@ -27,26 +28,31 @@
   --paper:#12161E; --panel:#1A202B; --panel2:#232B38; --ink:#E6EAF1; --muted:#96A0B0;
   --line:#2A3140; --line2:#3A4354; --accent:#4FAECF; --accent-ink:#7CC6DF;
   --accent-soft:#173341; --head:#202936; --zebra:#1E2530; --hover:#243240;
-  --good:#5CC290; --bad:#E48A82; --stu:#182734;
+  --good:#5CC290; --bad:#E48A82; --stu:#17222D;
   --shadow:0 1px 3px rgba(0,0,0,.4);
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{
   background:var(--paper); color:var(--ink);
-  font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif;
+  font-family:var(--font),'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif;
   font-size:14px; line-height:1.55;
 }
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 input,select{font:inherit;color:var(--ink)}
+select{
+  background:var(--panel); border:1px solid var(--line2); border-radius:7px;
+  padding:4px 8px; font-size:12.5px;
+}
+select:focus-visible, button:focus-visible{outline:2px solid var(--accent); outline-offset:-1px}
 /* ---------- 상단 바 ---------- */
 header.app{
   position:sticky; top:0; z-index:50; background:var(--panel);
   border-bottom:1px solid var(--line); box-shadow:var(--shadow);
 }
-.bar{display:flex; align-items:center; gap:14px; padding:9px 18px 4px; flex-wrap:wrap}
+.bar{display:flex; align-items:center; gap:12px; padding:9px 20px 4px; flex-wrap:wrap}
 .bar h1{
-  font-family:'Gowun Batang','Noto Sans KR',serif; font-size:19px; font-weight:700;
+  font-family:'Gowun Batang',var(--font),serif; font-size:19px; font-weight:700;
   margin:0; letter-spacing:.5px;
 }
 .bar h1 em{font-style:normal; color:var(--accent-ink)}
@@ -55,22 +61,19 @@ header.app{
   border-radius:999px; padding:2px 10px; letter-spacing:.4px; white-space:nowrap;
 }
 .bar .sp{flex:1}
+.bar .ctl{font-size:11.5px; color:var(--muted); display:inline-flex; gap:5px; align-items:center}
 #themeBtn{
   font-size:11.5px; color:var(--muted); border:1px solid var(--line2);
   border-radius:999px; padding:2px 10px;
 }
 #themeBtn:hover{color:var(--ink); border-color:var(--accent)}
-/* 학생 스트립 — 이 문서의 주인공 */
+/* 학생 스트립 */
 .stubar{
-  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
-  padding:7px 18px; background:var(--stu); border-top:1px solid var(--line);
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:8px 20px; background:var(--stu); border-top:1px solid var(--line);
 }
-.stubar label{font-size:12px; font-weight:700; color:var(--accent-ink)}
-.stubar select{
-  background:var(--panel); border:1px solid var(--line2); border-radius:7px;
-  padding:4px 8px; font-size:12.5px; max-width:230px;
-}
-.stubar select:focus-visible{outline:2px solid var(--accent)}
+.stubar .lb{font-size:12px; font-weight:700; color:var(--accent-ink)}
+.stubar select{max-width:180px}
 .scorechips{display:flex; gap:6px; flex-wrap:wrap; align-items:center}
 .sc{
   display:inline-flex; gap:5px; align-items:baseline; background:var(--panel);
@@ -78,8 +81,8 @@ header.app{
   font-size:11.5px; color:var(--muted); white-space:nowrap;
 }
 .sc b{font-size:12.5px; color:var(--ink); font-variant-numeric:tabular-nums; font-weight:700}
-/* ---------- 탭 (전체 표시, 줄바꿈) ---------- */
-nav.tabs{display:flex; flex-wrap:wrap; gap:2px; padding:0 12px; row-gap:0}
+/* ---------- 탭 ---------- */
+nav.tabs{display:flex; flex-wrap:wrap; gap:2px; padding:0 14px}
 nav.tabs .gsep{width:1px; background:var(--line); margin:6px 6px}
 nav.tabs button{
   display:flex; align-items:center; gap:6px; padding:7px 11px 6px; font-size:13px;
@@ -89,9 +92,8 @@ nav.tabs button{
 nav.tabs button .dot{width:7px;height:7px;border-radius:50%;flex:none}
 nav.tabs button:hover{background:var(--panel2); color:var(--ink)}
 nav.tabs button[aria-selected="true"]{color:var(--ink); font-weight:700; border-bottom-color:var(--tabc)}
-nav.tabs button:focus-visible{outline:2px solid var(--accent); outline-offset:-2px}
 /* ---------- 본문 ---------- */
-main{padding:16px 18px 40px; display:flex; flex-direction:column; gap:14px}
+main{padding:16px 20px 40px; display:flex; flex-direction:column; gap:14px}
 .panel{display:none; flex-direction:column; gap:14px}
 .panel.on{display:flex}
 h2.sheet{margin:2px 0 0; font-size:16px; font-weight:700; display:flex; align-items:center; gap:8px}
@@ -111,14 +113,14 @@ details.note .body{
 }
 p.cap{margin:0; font-size:12.5px; color:var(--muted); padding:0 2px}
 p.cap::before{content:"ⓘ "; color:var(--accent)}
-article.doc{padding:20px 26px 26px; max-width:62em}
+article.doc{padding:22px 30px 28px; max-width:70em}
 article.doc h3{
-  font-size:14.5px; margin:20px 0 6px; padding-left:10px;
+  font-size:15px; margin:22px 0 7px; padding-left:10px;
   border-left:3px solid var(--accent); color:var(--accent-ink);
 }
 article.doc p{margin:5px 0; white-space:pre-line}
 article.doc p.tip{color:var(--muted); font-size:13px}
-.gridwrap{overflow-x:auto; padding:12px}
+.gridwrap{overflow-x:auto; padding:14px}
 table.grid{border-collapse:collapse; font-size:12.5px}
 table.grid td{
   border:1px solid var(--line); padding:4px 9px; white-space:pre-line; min-width:44px;
@@ -127,10 +129,31 @@ table.grid td{
 table.grid td.num{text-align:right}
 table.grid td.hd{background:var(--head); font-weight:500}
 table.grid td:empty{border-color:transparent}
-.imgs{display:flex; flex-direction:column; gap:18px; padding:16px}
-.imgs figure{margin:0}
-.imgs figcaption{font-size:13px; font-weight:700; margin:0 0 8px; color:var(--accent-ink)}
-.imgs img{max-width:100%; border:1px solid var(--line); border-radius:6px; background:#fff}
+/* ---------- 차트 이미지 뷰어 ---------- */
+.imgs{display:flex; flex-direction:column; gap:20px; padding:16px}
+.imgs .zbar{display:flex; gap:6px; align-items:center}
+.imgs .zbar .zlb{font-size:12px; color:var(--muted); margin-right:2px}
+.imgs .zbar button{
+  font-size:12px; padding:2px 10px; border-radius:999px; border:1px solid var(--line2); color:var(--muted);
+}
+.imgs .zbar button[aria-pressed="true"]{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700}
+.imgs figure{margin:0; display:flex; flex-direction:column; gap:8px}
+.imgs figcaption{font-size:13.5px; font-weight:700; margin:0; color:var(--accent-ink)}
+.imgs .imgscroll{overflow-x:auto; border:1px solid var(--line); border-radius:6px; background:#fff}
+.imgs img{display:block; cursor:zoom-in}
+dialog.lightbox{
+  width:96vw; height:94vh; border:none; border-radius:10px; padding:0;
+  background:var(--panel); color:var(--ink);
+}
+dialog.lightbox::backdrop{background:rgba(10,14,20,.7)}
+dialog.lightbox .lbbar{
+  display:flex; align-items:center; gap:10px; padding:8px 14px; border-bottom:1px solid var(--line);
+  font-size:13px; font-weight:700;
+}
+dialog.lightbox .lbbar button{margin-left:auto; font-size:13px; color:var(--muted); padding:2px 10px;
+  border:1px solid var(--line2); border-radius:7px}
+dialog.lightbox .lbbody{overflow:auto; height:calc(94vh - 44px); background:#fff}
+dialog.lightbox img{display:block}
 /* ---------- 데이터 표 ---------- */
 .tbl .bar2{
   display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px 12px;
@@ -139,22 +162,18 @@ table.grid td:empty{border-color:transparent}
 .tbl .bar2 .ttl{font-size:13.5px; font-weight:700; margin-right:4px}
 .tbl input[type=search]{
   background:var(--paper); border:1px solid var(--line2); border-radius:7px;
-  padding:5px 10px; width:220px; font-size:12.5px;
+  padding:5px 10px; width:210px; font-size:12.5px;
 }
-.tbl input[type=search]:focus{outline:2px solid var(--accent); outline-offset:-1px}
-.tbl select{
-  font-size:12px; background:var(--paper); border:1px solid var(--line2);
-  border-radius:7px; padding:4px 6px; max-width:170px;
-}
+.tbl select{background:var(--paper); font-size:12px; padding:4px 6px; max-width:170px}
 .tbl .cnt{margin-left:auto; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums}
-.tbl .mini{font-size:12px; color:var(--accent-ink); padding:4px 8px; border-radius:6px; border:1px solid transparent}
+.tbl .mini{font-size:12px; color:var(--accent-ink); padding:4px 9px; border-radius:6px; border:1px solid transparent}
 .tbl .mini:hover{background:var(--accent-soft)}
-.tbl .mini[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft)}
-.scroll{overflow:auto; max-height:max(420px, calc(100vh - 260px)); border-radius:0 0 10px 10px}
-table.data{border-collapse:separate; border-spacing:0; font-size:13px; table-layout:fixed}
+.tbl .mini[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft); font-weight:700}
+.scroll{overflow:auto; max-height:var(--tblmax, calc(100vh - 280px)); border-radius:0 0 10px 10px}
+table.data{border-collapse:separate; border-spacing:0; font-size:13px; table-layout:fixed; width:100%}
 table.data th, table.data td{
   border-bottom:1px solid var(--line); border-right:1px solid var(--line);
-  padding:4px 8px; vertical-align:top; overflow-wrap:break-word; white-space:pre-line;
+  padding:4px 9px; vertical-align:top; overflow-wrap:break-word; white-space:pre-line;
 }
 table.data thead th{
   position:sticky; background:var(--head); font-weight:700; text-align:center;
@@ -162,12 +181,19 @@ table.data thead th{
 }
 table.data thead tr:nth-child(1) th{top:0}
 table.data thead th.grp{color:var(--accent-ink); letter-spacing:.06em; font-size:11.5px}
+table.data thead th[data-col]{cursor:pointer; user-select:none}
+table.data thead th[data-col]:hover{color:var(--accent-ink)}
+table.data thead th.s-asc::after{content:" ▲"; font-size:9px; color:var(--accent-ink)}
+table.data thead th.s-desc::after{content:" ▼"; font-size:9px; color:var(--accent-ink)}
 table.data td.num{text-align:right; font-variant-numeric:tabular-nums}
 table.data td.pos{color:var(--good); font-weight:700}
 table.data td.neg{color:var(--bad)}
+table.data td.selcol, table.data th.selcol{text-align:center; padding:4px 4px}
+table.data input[type=checkbox]{accent-color:var(--accent); width:14px; height:14px; cursor:pointer}
 table.data tbody tr:nth-child(even) td{background:var(--zebra)}
 table.data tbody tr:nth-child(odd) td{background:var(--panel)}
 table.data tbody tr:hover td{background:var(--hover)}
+table.data tbody tr.selrow td{background:var(--accent-soft)}
 table.data .stick{position:sticky; z-index:2}
 table.data thead .stick{z-index:4}
 .oneline tbody td{white-space:nowrap; text-overflow:ellipsis; overflow:hidden}
@@ -195,27 +221,22 @@ table.data thead .stick{z-index:4}
 }
 .sform input[type=text]{width:150px}
 .sform input[type=number]{width:74px; font-variant-numeric:tabular-nums}
-.sform input:focus-visible{outline:2px solid var(--accent); outline-offset:-1px}
 .sw{display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); cursor:pointer}
 .sw input{accent-color:var(--accent); width:15px; height:15px}
 .hintbox{font-size:12.5px; color:var(--bad); padding:2px 2px}
-/* 소형 정보 그리드 (내신 요약·최저 패널) */
 table.kv{border-collapse:collapse; font-size:12.5px; margin:0}
 table.kv th, table.kv td{
-  border:1px solid var(--line); padding:3px 9px; font-variant-numeric:tabular-nums;
+  border:1px solid var(--line); padding:3px 10px; font-variant-numeric:tabular-nums;
   text-align:center; white-space:nowrap;
 }
 table.kv th{background:var(--head); font-weight:700; font-size:12px}
 table.kv td.rowh{background:var(--head); font-weight:700}
-.kvwrap{overflow-x:auto; padding:12px}
-.kvtitle{font-size:13px; font-weight:700; padding:12px 14px 0; color:var(--accent-ink)}
-mark{background:transparent; color:inherit; font-weight:700; text-decoration:underline;
-  text-decoration-color:var(--accent); text-underline-offset:2px}
+.kvwrap{overflow-x:auto; padding:14px}
+.kvtitle{font-size:13px; font-weight:700; padding:14px 16px 0; color:var(--accent-ink)}
 footer{padding:18px; font-size:11.5px; color:var(--muted); text-align:center}
 @media (max-width:700px){
-  .bar{flex-wrap:wrap} .tbl input[type=search]{width:140px}
-  .scroll{max-height:calc(100vh - 170px)}
-  .stubar select{max-width:170px}
+  .tbl input[type=search]{width:140px}
+  .stubar select{max-width:130px}
 }
 </style>
 </head>
@@ -225,18 +246,26 @@ footer{padding:18px; font-size:11.5px; color:var(--muted); text-align:center}
     <h1><em>NAVI</em> 수시상담</h1>
     <span class="chip">2026학년도 · 기준 26.08.14</span>
     <span class="sp"></span>
+    <span class="ctl">글꼴 <select id="fontSel"></select></span>
     <button id="themeBtn" title="테마 전환">테마: 자동</button>
   </div>
   <div class="stubar" id="stubar">
-    <label for="stuSel">학생</label>
-    <select id="stuSel"></select>
-    <label for="monSel">모의고사</label>
+    <span class="lb">학생</span>
+    <select id="selGrade" title="학년"></select>
+    <select id="selClass" title="반"></select>
+    <select id="selNum" title="번호"></select>
+    <select id="selName" title="이름"></select>
+    <span class="lb">모의고사</span>
     <select id="monSel"></select>
     <div class="scorechips" id="stuChips"></div>
   </div>
   <nav class="tabs" id="tabs" role="tablist"></nav>
 </header>
 <main id="main"></main>
+<dialog class="lightbox" id="lightbox">
+  <div class="lbbar"><span id="lbTitle"></span><button id="lbClose">닫기 ✕</button></div>
+  <div class="lbbody"><img id="lbImg" alt=""></div>
+</dialog>
 <footer>원본 엑셀 워크북(수시 NAVI, 26.08.14 기준)에서 변환된 상담용 문서입니다 ·
 백분위 산출·검색은 원본 수식을 그대로 이식해 전체 데이터 대조 검증을 거쳤습니다</footer>
 <script>
@@ -247,6 +276,47 @@ const $ = (s, el) => (el || document).querySelector(s);
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const fmtN = n => n.toLocaleString('ko-KR');
 const MONTHS = ['3월','5월','6월','7월','9월','10월','11월'];
+
+/* ---------- 글꼴 ---------- */
+const FONTS = [
+  {id:'pretendard', label:'프리텐다드', family:"'Pretendard Variable',Pretendard",
+   href:'https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css'},
+  {id:'noto', label:'Noto Sans KR', family:"'Noto Sans KR'",
+   href:'https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap'},
+  {id:'plex', label:'IBM Plex Sans KR', family:"'IBM Plex Sans KR'",
+   href:'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap'},
+  {id:'gothica1', label:'Gothic A1', family:"'Gothic A1'",
+   href:'https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;500;700&display=swap'},
+  {id:'gowun', label:'고운돋움', family:"'Gowun Dodum'",
+   href:'https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap'},
+];
+(() => {
+  const sel = $('#fontSel');
+  FONTS.forEach(f => {
+    const o = document.createElement('option');
+    o.value = f.id; o.textContent = f.label;
+    sel.appendChild(o);
+  });
+  const loaded = new Set();
+  const apply = id => {
+    const f = FONTS.find(x => x.id === id) || FONTS[0];
+    if (!loaded.has(f.id)) {
+      const l = document.createElement('link');
+      l.rel = 'stylesheet'; l.href = f.href;
+      document.head.appendChild(l);
+      loaded.add(f.id);
+    }
+    document.documentElement.style.setProperty('--font', f.family);
+    sel.value = f.id;
+  };
+  let cur = 'pretendard';
+  try { cur = localStorage.getItem('navi-font') || 'pretendard'; } catch (e) {}
+  apply(cur);
+  sel.addEventListener('change', () => {
+    try { localStorage.setItem('navi-font', sel.value); } catch (e) {}
+    apply(sel.value);
+  });
+})();
 
 /* ---------- 테마 ---------- */
 (() => {
@@ -268,17 +338,24 @@ const MONTHS = ['3월','5월','6월','7월','9월','10월','11월'];
   apply();
 })();
 
+/* ---------- 표 높이: 창 크기에 맞춤 ---------- */
+function fitHeights(){
+  const h = $('header.app').offsetHeight;
+  const max = Math.max(460, window.innerHeight - h - 150);
+  document.documentElement.style.setProperty('--tblmax', max + 'px');
+}
+window.addEventListener('resize', fitHeights);
+
 /* ---------- 학생 상태 ---------- */
 const STUDENTS = SEARCH.students;
 const STATE = {si: 0, month: '미적용'};
-const DYN = [];   // 학생/월 변경 시 다시 그릴 블록들
+const DYN = [];
 function student(){ return STUDENTS[STATE.si] || null; }
 function monthRec(){
   const s = student();
   return s && STATE.month !== '미적용' ? (s.months[STATE.month] || null) : null;
 }
 function subjectSet(){
-  // 백분위 산출 입력: {kor, mat, t1, t2, eng}
   const m = monthRec();
   if (!m) return null;
   return {kor: m.kor[0], mat: m.mat[0], t1: m.t1[1], t2: m.t2[1], eng: m.eng};
@@ -288,14 +365,46 @@ function bestMonth(s){
     if (s.months[MONTHS[i]]) return MONTHS[i];
   return '미적용';
 }
+/* 학년·반·번호·이름 연동 드롭다운 */
 (function initStudentBar(){
-  const sel = $('#stuSel'), mon = $('#monSel');
-  STUDENTS.forEach((s, i) => {
-    const o = document.createElement('option');
-    o.value = i;
-    o.textContent = `${s.g}학년 ${s.b}반 ${String(s.n).padStart(2,'0')}번 ${s.name}`;
-    sel.appendChild(o);
+  const gSel = $('#selGrade'), cSel = $('#selClass'), nSel = $('#selNum'), mSel = $('#selName');
+  const mon = $('#monSel');
+  const grades = [...new Set(STUDENTS.map(s => s.g))].sort((a, b) => a - b);
+  if (grades.length < 2) gSel.style.display = 'none';
+  const fill = (sel, opts) => {
+    sel.innerHTML = opts.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join('');
+  };
+  function rebuild(){
+    const st = STUDENTS[STATE.si];
+    fill(gSel, grades.map(g => [g, g + '학년']));
+    gSel.value = st.g;
+    const classes = [...new Set(STUDENTS.filter(s => s.g === st.g).map(s => s.b))].sort((a, b) => a - b);
+    fill(cSel, classes.map(b => [b, b + '반']));
+    cSel.value = st.b;
+    const inClass = STUDENTS.map((s, i) => [s, i]).filter(([s]) => s.g === st.g && s.b === st.b);
+    fill(nSel, inClass.map(([s, i]) => [i, s.n + '번']));
+    nSel.value = STATE.si;
+    fill(mSel, inClass.map(([s, i]) => [i, s.name]));
+    mSel.value = STATE.si;
+  }
+  function pick(si){
+    STATE.si = si;
+    STATE.month = bestMonth(student());
+    mon.value = STATE.month;
+    rebuild();
+    onStateChange();
+  }
+  gSel.addEventListener('change', () => {
+    const i = STUDENTS.findIndex(s => s.g === Number(gSel.value));
+    if (i >= 0) pick(i);
   });
+  cSel.addEventListener('change', () => {
+    const st = student();
+    const i = STUDENTS.findIndex(s => s.g === st.g && s.b === Number(cSel.value));
+    if (i >= 0) pick(i);
+  });
+  nSel.addEventListener('change', () => pick(Number(nSel.value)));
+  mSel.addEventListener('change', () => pick(Number(mSel.value)));
   ['미적용', ...MONTHS].forEach(m => {
     const o = document.createElement('option');
     o.value = m; o.textContent = m === '미적용' ? '미적용(전체)' : m + ' 모의고사';
@@ -306,14 +415,9 @@ function bestMonth(s){
     if (saved && STUDENTS[saved.si]) { STATE.si = saved.si; STATE.month = saved.month; }
     else STATE.month = STUDENTS.length ? bestMonth(STUDENTS[0]) : '미적용';
   } catch (e) { STATE.month = STUDENTS.length ? bestMonth(STUDENTS[0]) : '미적용'; }
-  sel.value = STATE.si; mon.value = STATE.month;
-  sel.addEventListener('change', () => {
-    STATE.si = Number(sel.value);
-    STATE.month = bestMonth(student());
-    mon.value = STATE.month;
-    onStateChange();
-  });
+  mon.value = STATE.month;
   mon.addEventListener('change', () => { STATE.month = mon.value; onStateChange(); });
+  rebuild();
 })();
 function renderChips(){
   const box = $('#stuChips');
@@ -352,7 +456,7 @@ function calcPct(code, st){
     if (name === 't1') return st.t1;
     if (name === 't2') return st.t2;
     if (name === 'tmax') {
-      const vs = [st.t1, st.t2].filter(v => v !== null && v !== undefined);
+      const vs = [st.t1, st.t2].filter(v => v != null);
       return vs.length ? Math.max(...vs) : null;
     }
     if (name === 'tavg') {
@@ -418,6 +522,7 @@ function select(i) {
     b.setAttribute('aria-selected', j === i));
   document.querySelectorAll('.panel').forEach((p, j) => p.classList.toggle('on', j === i));
   if (!built.has(i)) { built.add(i); buildSheet(i); }
+  fitHeights();
 }
 function buildSheet(i) {
   const sh = DATA.sheets[i], panel = $('#panel' + i);
@@ -463,28 +568,66 @@ function buildBlock(bl) {
     p.className = 'cap'; p.textContent = bl.text;
     return p;
   }
-  if (bl.t === 'imgs') {
-    const d = document.createElement('div');
-    d.className = 'imgs card';
-    bl.items.forEach(it => {
-      const f = document.createElement('figure');
-      if (it.title) {
-        const c = document.createElement('figcaption'); c.textContent = it.title; f.appendChild(c);
-      }
-      const img = document.createElement('img');
-      img.loading = 'lazy'; img.src = it.src; img.alt = it.title || '차트';
-      f.appendChild(img);
-      d.appendChild(f);
-    });
-    return d;
-  }
+  if (bl.t === 'imgs') return buildImgs(bl);
   if (bl.t === 'searchapp') return buildSearchApp();
   if (bl.t === 'minpanel') return buildMinPanel();
   if (bl.t === 'gradechip') return buildGradeChip();
   return buildTable(bl);
 }
 
-/* ---------- 데이터 표 (지연 렌더 + 검색/필터 + 한 줄 보기) ---------- */
+/* ---------- 차트 이미지 (확대 보기) ---------- */
+function buildImgs(bl){
+  const d = document.createElement('div');
+  d.className = 'imgs card';
+  const zbar = document.createElement('div');
+  zbar.className = 'zbar';
+  zbar.innerHTML = '<span class="zlb">차트 크기</span>';
+  const zooms = [['화면맞춤', 0], ['100%', 1], ['150%', 1.5]];
+  const imgs = [];
+  let cur = 1;
+  const apply = () => {
+    imgs.forEach(img => {
+      if (cur === 0) { img.style.width = '100%'; }
+      else { img.style.width = (img.dataset.nw * cur) + 'px'; img.style.maxWidth = 'none'; }
+    });
+    zbar.querySelectorAll('button').forEach((b, i) =>
+      b.setAttribute('aria-pressed', zooms[i][1] === cur));
+  };
+  zooms.forEach(([lab, z]) => {
+    const b = document.createElement('button');
+    b.textContent = lab;
+    b.addEventListener('click', () => { cur = z; apply(); });
+    zbar.appendChild(b);
+  });
+  d.appendChild(zbar);
+  bl.items.forEach(it => {
+    const f = document.createElement('figure');
+    if (it.title) {
+      const c = document.createElement('figcaption'); c.textContent = it.title; f.appendChild(c);
+    }
+    const scr = document.createElement('div');
+    scr.className = 'imgscroll';
+    const img = document.createElement('img');
+    img.loading = 'lazy'; img.alt = it.title || '차트';
+    img.addEventListener('load', () => { img.dataset.nw = img.naturalWidth; apply(); }, {once: true});
+    img.src = it.src;
+    if (img.complete && img.naturalWidth) { img.dataset.nw = img.naturalWidth; }
+    img.addEventListener('click', () => {
+      $('#lbTitle').textContent = it.title || '차트';
+      $('#lbImg').src = it.src;
+      $('#lightbox').showModal();
+    });
+    imgs.push(img);
+    scr.appendChild(img);
+    f.appendChild(scr);
+    d.appendChild(f);
+  });
+  return d;
+}
+$('#lbClose').addEventListener('click', () => $('#lightbox').close());
+$('#lightbox').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+
+/* ---------- 데이터 표 ---------- */
 function buildTable(bl) {
   const wrap = document.createElement('div');
   wrap.className = 'tbl card';
@@ -500,13 +643,23 @@ function buildTable(bl) {
   const sels = [];
   (bl.filters || []).forEach(ci => {
     const s = document.createElement('select');
-    const uniq = [...new Set(bl.rows.map(r => r[ci]).filter(Boolean))].sort((a, b) =>
+    const uniq = [...new Set(bl.rows.map(r => r[ci]).filter(v => v && v !== '-'))].sort((a, b) =>
       String(a).localeCompare(String(b), 'ko'));
     s.innerHTML = `<option value="">${esc(bl.names[ci])}: 전체</option>` +
       uniq.map(u => `<option>${esc(u)}</option>`).join('');
     s.dataset.ci = ci;
     bar.appendChild(s); sels.push(s);
   });
+  let selOnlyBtn = null, csvBtn = null;
+  if (bl.selCol) {
+    selOnlyBtn = document.createElement('button');
+    selOnlyBtn.className = 'mini'; selOnlyBtn.textContent = '선택만 보기';
+    selOnlyBtn.setAttribute('aria-pressed', 'false');
+    bar.appendChild(selOnlyBtn);
+    csvBtn = document.createElement('button');
+    csvBtn.className = 'mini'; csvBtn.textContent = 'CSV 내보내기';
+    bar.appendChild(csvBtn);
+  }
   const oneBtn = document.createElement('button');
   oneBtn.className = 'mini'; oneBtn.textContent = '한 줄 보기';
   oneBtn.setAttribute('aria-pressed', 'false');
@@ -523,7 +676,7 @@ function buildTable(bl) {
   scroll.className = 'scroll';
   const table = document.createElement('table');
   table.className = 'data';
-  table.style.width = bl.widths.reduce((a, b) => a + b, 0) + 'px';
+  table.style.minWidth = bl.widths.reduce((a, b) => a + b, 0) + 'px';
   table.innerHTML = `<colgroup>${bl.widths.map(w => `<col style="width:${w}px">`).join('')}</colgroup>
     <thead>${bl.head}</thead><tbody></tbody>`;
   scroll.appendChild(table);
@@ -536,17 +689,49 @@ function buildTable(bl) {
     oneBtn.setAttribute('aria-pressed', on);
   });
 
+  const off = bl.selCol ? 1 : 0;   // 데이터 열 → 표 열 오프셋 (선택 체크박스 열)
+  const sortState = {col: null, dir: 0};
+
+  // thead 점유 그리드로 각 th의 표 열 위치 계산 → 단일 열 th는 정렬 가능
   requestAnimationFrame(() => {
-    const trs = table.tHead.rows;
+    const trs = [...table.tHead.rows];
     if (trs.length > 1) {
       const h0 = trs[0].getBoundingClientRect().height;
       for (let r = 1; r < trs.length; r++)
         for (const th of trs[r].cells) th.style.top = (h0 * r) + 'px';
     }
+    const grid = [];
+    trs.forEach((tr, ri) => {
+      grid[ri] = grid[ri] || [];
+      [...tr.cells].forEach(th => {
+        let c = 0;
+        while (grid[ri][c]) c++;
+        const cs = th.colSpan || 1, rs = th.rowSpan || 1;
+        for (let r = ri; r < ri + rs; r++) {
+          grid[r] = grid[r] || [];
+          for (let cc = c; cc < c + cs; cc++) grid[r][cc] = true;
+        }
+        const dc = c - off;
+        if (cs === 1 && dc >= 0 && !th.classList.contains('grp') && !th.classList.contains('selcol')) {
+          th.dataset.col = dc;
+          th.title = '클릭: 오름차순/내림차순 정렬';
+          th.addEventListener('click', () => {
+            if (sortState.col === dc) {
+              sortState.dir = sortState.dir === 1 ? -1 : (sortState.dir === -1 ? 0 : 1);
+              if (sortState.dir === 0) sortState.col = null;
+            } else { sortState.col = dc; sortState.dir = 1; }
+            trs.forEach(tr2 => [...tr2.cells].forEach(x => x.classList.remove('s-asc', 's-desc')));
+            if (sortState.col !== null)
+              th.classList.add(sortState.dir === 1 ? 's-asc' : 's-desc');
+            applyFilter();
+          });
+        }
+      });
+    });
     if (bl.sticky > 0) {
       const offs = [];
-      let off = 0;
-      for (let c = 0; c < bl.sticky; c++) { offs.push(off); off += bl.widths[c]; }
+      let o = 0;
+      for (let c = 0; c < bl.sticky; c++) { offs.push(o); o += bl.widths[c]; }
       for (const tr of table.tHead.rows) {
         let ci = 0;
         for (const cell of tr.cells) {
@@ -563,12 +748,32 @@ function buildTable(bl) {
   let view = bl.rows.map((_, idx) => idx);
   let drawn = 0;
   const tbody = table.tBodies[0];
+  const sel = bl.sel;   // Set (selCol일 때)
+  const masterCb = () => table.tHead.querySelector('input[type=checkbox]');
   function renderChunk() {
     const frag = document.createDocumentFragment();
     const end = Math.min(drawn + CHUNK, view.length);
     for (let k = drawn; k < end; k++) {
-      const row = bl.rows[view[k]];
+      const idx = view[k];
+      const row = bl.rows[idx];
       const tr = document.createElement('tr');
+      if (bl.selCol) {
+        const key = bl.keys[idx];
+        const td = document.createElement('td');
+        td.className = 'selcol' + (bl.sticky > 0 ? ' stick' : '');
+        if (bl.sticky > 0) td.style.left = '0px';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = sel.has(key);
+        if (cb.checked) tr.classList.add('selrow');
+        cb.addEventListener('change', () => {
+          cb.checked ? sel.add(key) : sel.delete(key);
+          tr.classList.toggle('selrow', cb.checked);
+          updateCnt();
+        });
+        td.appendChild(cb);
+        tr.appendChild(td);
+      }
       for (let c = 0; c < row.length; c++) {
         const td = document.createElement('td');
         if (bl.aligns[c]) td.className = 'num';
@@ -576,9 +781,9 @@ function buildTable(bl) {
           td.classList.add(parseFloat(row[c]) >= 0 ? 'pos' : 'neg');
         }
         td.textContent = row[c];
-        if (bl.sticky > 0 && c < bl.sticky) {
+        if (bl.sticky > 0 && c + off < bl.sticky) {
           td.classList.add('stick');
-          td.style.left = bl.widths.slice(0, c).reduce((a, b) => a + b, 0) + 'px';
+          td.style.left = bl.widths.slice(0, c + off).reduce((a, b) => a + b, 0) + 'px';
         }
         tr.appendChild(td);
       }
@@ -586,23 +791,51 @@ function buildTable(bl) {
     }
     drawn = end;
     tbody.appendChild(frag);
+    updateCnt();
+  }
+  function updateCnt(){
     cnt.textContent = `${fmtN(view.length)}행` +
       (view.length < bl.rows.length ? ` (전체 ${fmtN(bl.rows.length)}행)` : '') +
+      (bl.selCol && sel.size ? ` · 선택 ${fmtN(sel.size)}건` : '') +
       (drawn < view.length ? ` · ${fmtN(drawn)}행 로드됨` : '');
   }
   const io = new IntersectionObserver(es => {
     if (es[0].isIntersecting && drawn < view.length) renderChunk();
   }, {root: scroll, rootMargin: '600px'});
   io.observe(sentinel);
+  const numVal = s => {
+    if (s === '-' || s === '') return null;
+    const v = parseFloat(String(s).replace(/,/g, ''));
+    return isNaN(v) ? null : v;
+  };
   function applyFilter() {
     const q = inp.value.trim().toLowerCase();
-    const conds = sels.filter(s => s.value).map(s => [Number(s.dataset.ci), s.value]);
+    const conds = sels.filter(s2 => s2.value).map(s2 => [Number(s2.dataset.ci), s2.value]);
+    const selOnly = selOnlyBtn && selOnlyBtn.getAttribute('aria-pressed') === 'true';
     view = [];
     for (let idx = 0; idx < bl.rows.length; idx++) {
       if (q && !lower[idx].includes(q)) continue;
+      if (selOnly && !sel.has(bl.keys[idx])) continue;
       let ok = true;
       for (const [ci, v] of conds) if (bl.rows[idx][ci] !== v) { ok = false; break; }
       if (ok) view.push(idx);
+    }
+    if (sortState.col !== null) {
+      const c = sortState.col, dir = sortState.dir, numeric = bl.aligns[c];
+      view.sort((a, b) => {
+        const va = bl.rows[a][c], vb = bl.rows[b][c];
+        if (numeric) {
+          const na = numVal(va), nb2 = numVal(vb);
+          if (na === null && nb2 === null) return a - b;
+          if (na === null) return 1;
+          if (nb2 === null) return -1;
+          return (na - nb2) * dir || a - b;
+        }
+        if (!va && !vb) return a - b;
+        if (!va) return 1;
+        if (!vb) return -1;
+        return String(va).localeCompare(String(vb), 'ko') * dir || a - b;
+      });
     }
     tbody.textContent = '';
     drawn = 0;
@@ -611,27 +844,63 @@ function buildTable(bl) {
   }
   let deb;
   inp.addEventListener('input', () => { clearTimeout(deb); deb = setTimeout(applyFilter, 200); });
-  sels.forEach(s => s.addEventListener('change', applyFilter));
+  sels.forEach(s2 => s2.addEventListener('change', applyFilter));
   reset.addEventListener('click', () => {
-    inp.value = ''; sels.forEach(s => s.value = ''); applyFilter();
+    inp.value = '';
+    sels.forEach(s2 => s2.value = '');
+    sortState.col = null; sortState.dir = 0;
+    table.tHead.querySelectorAll('th').forEach(x => x.classList.remove('s-asc', 's-desc'));
+    if (selOnlyBtn) selOnlyBtn.setAttribute('aria-pressed', 'false');
+    applyFilter();
   });
+  if (bl.selCol) {
+    const mc = masterCb();
+    if (mc) mc.addEventListener('change', () => {
+      if (mc.checked) view.forEach(idx => sel.add(bl.keys[idx]));
+      else view.forEach(idx => sel.delete(bl.keys[idx]));
+      tbody.textContent = ''; drawn = 0; renderChunk();
+    });
+    selOnlyBtn.addEventListener('click', () => {
+      const on = selOnlyBtn.getAttribute('aria-pressed') !== 'true';
+      selOnlyBtn.setAttribute('aria-pressed', on);
+      applyFilter();
+    });
+    csvBtn.addEventListener('click', () => {
+      const idxs = sel.size ? view.filter(idx => sel.has(bl.keys[idx])) : view;
+      const header = bl.names.map(n => `"${String(n).replace(/"/g, '""')}"`).join(',');
+      const lines = idxs.map(idx =>
+        bl.rows[idx].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+      const blob = new Blob(['﻿' + header + '\n' + lines.join('\n')], {type: 'text/csv'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'NAVI_검색결과.csv';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+  }
   renderChunk();
   return wrap;
 }
 
-/* ---------- 검색 앱 (엑셀 '검색' 시트의 이식) ---------- */
+/* ---------- 검색 앱 ---------- */
 const ZONES = [['서울','서울'], ['경인','경인권'], ['충청','충청권'], ['강원','강원권'],
                ['경상','경상권'], ['전라','전라권'], ['제주','제주권']];
 const SERIES = ['공통', '인문', '자연', '예체'];
+const RESULT_NAMES = ['#','지역','세부지역','대학','26모집단위','25모집단위','전형명(정시)','25모집단위(정시)',
+  '반영영역','학생백분위','70%백분위','영어/한국사','차이값',
+  '교과1 전형명','교과1 50%','교과1 70%','교과2 전형명','교과2 50%','교과2 70%',
+  '교과3 전형명','교과3 50%','교과3 70%','종합1 전형명','종합1 50%','종합1 70%',
+  '종합2 전형명','종합2 50%','종합2 70%'];
 function buildSearchApp(){
   const box = document.createElement('div');
   box.style.cssText = 'display:flex;flex-direction:column;gap:14px';
   const s = {zones: new Set(ZONES.map(z => z[1])), series: new Set(SERIES),
              lo: -10, hi: 10, univ: '', major: '', five: true};
+  const sel = new Set();   // 체크한 행 (data 행 인덱스), 재검색해도 유지
 
   const form = document.createElement('div');
   form.className = 'card sform';
-  const chipRow = (label, items, set, all) => {
+  const chipRow = (label, items, set) => {
     const row = document.createElement('div');
     row.className = 'srow';
     row.innerHTML = `<span class="lbl">${label}</span>`;
@@ -639,6 +908,7 @@ function buildSearchApp(){
     chips.className = 'chips';
     const allBtn = document.createElement('button');
     allBtn.textContent = '전체';
+    const btns = [];
     const sync = () => {
       allBtn.setAttribute('aria-pressed', set.size === items.length);
       btns.forEach(([b, v]) => b.setAttribute('aria-pressed', set.has(v)));
@@ -649,7 +919,6 @@ function buildSearchApp(){
       sync(); refresh();
     });
     chips.appendChild(allBtn);
-    const btns = [];
     items.forEach(it => {
       const [lab, val] = typeof it === 'string' ? [it, it] : it;
       const b = document.createElement('button');
@@ -681,11 +950,9 @@ function buildSearchApp(){
   form.appendChild(hint);
   box.appendChild(form);
 
-  // 내신 요약 카드
   const nae = document.createElement('div');
   nae.className = 'card';
   box.appendChild(nae);
-
   const holder = document.createElement('div');
   box.appendChild(holder);
 
@@ -694,10 +961,8 @@ function buildSearchApp(){
   const str = i => (typeof i === 'number' ? U.strings[i] : '');
   let deb;
   const refresh = () => { clearTimeout(deb); deb = setTimeout(run, 120); };
-  ['qLo', 'qHi', 'qUniv', 'qMajor', 'qFive'].forEach(id => {
-    form.addEventListener('input', e => {
-      if (e.target.id === id) refresh();
-    });
+  form.addEventListener('input', e => {
+    if (['qLo', 'qHi', 'qUniv', 'qMajor', 'qFive'].includes(e.target.id)) refresh();
   });
 
   function renderNaesin(){
@@ -738,7 +1003,6 @@ function buildSearchApp(){
     for (let i = 0; i < U.rows.length; i++) {
       const r = U.rows[i];
       const zone = str(r[CI.A]), series = str(r[CI.L]);
-      // 엑셀 FIND 의미론: 값이 비어 있으면 항상 통과
       if (zone !== '' && !s.zones.has(zone)) continue;
       if (series !== '' && !s.series.has(series)) continue;
       const univ = str(r[CI.D]), m26 = str(r[CI.H]);
@@ -758,14 +1022,15 @@ function buildSearchApp(){
       res.push([diff === null ? Infinity : diff, i, ax]);
     }
     res.sort((a, b) => (a[0] - b[0]) || (a[1] - b[1]));
-    const f2 = v => v === null || v === undefined ? '-' : (typeof v === 'number' ? (Math.round(v * 100) / 100).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1') : String(v));
     const cut = (r, c9, c5) => {
       const v = s.five ? r[CI[c5]] : r[CI[c9]];
       return v === null || v === undefined ? '-' : Number(v).toFixed(2);
     };
-    const rows = res.map(([diff, i, ax], k) => {
+    const keys = [], rows = [];
+    res.forEach(([diff, i, ax], k) => {
       const r = U.rows[i];
-      return [String(k + 1), str(r[CI.B]), str(r[CI.C]), str(r[CI.D]),
+      keys.push(i);
+      rows.push([String(k + 1), str(r[CI.B]), str(r[CI.C]), str(r[CI.D]),
         str(r[CI.H]), str(r[CI.E]),
         str(r[CI.F]), str(r[CI.G]), str(r[CI.AW]),
         ax === null ? '-' : ax.toFixed(2),
@@ -775,11 +1040,12 @@ function buildSearchApp(){
         str(r[CI.U]), cut(r, 'V', 'X'), cut(r, 'W', 'Y'),
         str(r[CI.AA]), cut(r, 'AB', 'AD'), cut(r, 'AC', 'AE'),
         str(r[CI.AG]), cut(r, 'AH', 'AJ'), cut(r, 'AI', 'AK'),
-        str(r[CI.AM]), cut(r, 'AN', 'AP'), cut(r, 'AO', 'AQ')];
+        str(r[CI.AM]), cut(r, 'AN', 'AP'), cut(r, 'AO', 'AQ')]);
     });
     const cutLbl = s.five ? '(5등급)' : '(9등급)';
     const head =
-      `<tr><th class="grp" rowspan="2">#</th><th class="grp" colspan="3">기본사항</th>
+      `<tr><th class="selcol" rowspan="2"><input type="checkbox" title="현재 목록 전체 선택"></th>
+        <th rowspan="2" data-skip="1">#</th><th class="grp" colspan="3">기본사항</th>
         <th class="grp" colspan="2">수시</th><th class="grp" colspan="6">정시 (2025 입시결과)</th>
         <th class="grp" colspan="3">교과1 ${cutLbl}</th><th class="grp" colspan="3">교과2 ${cutLbl}</th>
         <th class="grp" colspan="3">교과3 ${cutLbl}</th><th class="grp" colspan="3">종합1 ${cutLbl}</th>
@@ -790,10 +1056,13 @@ function buildSearchApp(){
         <th>전형명</th><th>50%</th><th>70%</th><th>전형명</th><th>50%</th><th>70%</th>
         <th>전형명</th><th>50%</th><th>70%</th><th>전형명</th><th>50%</th><th>70%</th>
         <th>전형명</th><th>50%</th><th>70%</th></tr>`;
-    const widths = [40, 52, 72, 92, 150, 150, 96, 150, 108, 76, 76, 72, 64,
-      110, 56, 56, 110, 56, 56, 110, 56, 56, 130, 56, 56, 130, 56, 56];
-    const aligns = widths.map((_, c) => [0, 9, 10, 12, 14, 15, 17, 18, 20, 21, 23, 24, 26, 27].includes(c) ? 1 : 0);
-    const bl = {head, rows, widths, aligns, sticky: 4, filters: [], names: [], diffCol: 12,
+    const widths = [34, 44, 54, 76, 96, 155, 155, 100, 155, 112, 78, 78, 76, 66,
+      112, 58, 58, 112, 58, 58, 112, 58, 58, 132, 58, 58, 132, 58, 58];
+    const numCols = [0, 9, 10, 12, 14, 15, 17, 18, 20, 21, 23, 24, 26, 27];
+    const aligns = RESULT_NAMES.map((_, c) => numCols.includes(c) ? 1 : 0);
+    const bl = {head, rows, widths, aligns, sticky: 5, diffCol: 12,
+      selCol: true, sel, keys,
+      filters: [1, 2, 3, 8, 11], names: RESULT_NAMES,
       title: `검색 결과 ${fmtN(rows.length)}건` + (misApplied ? ' (모의고사 미적용)' : ` (${STATE.month} 기준)`)};
     holder.textContent = '';
     holder.appendChild(buildTable(bl));
@@ -855,8 +1124,7 @@ function buildMinPanel(){
     months.forEach((m, i) => {
       html += `<tr><td class="rowh">${m}</td>` + cols(ds[i]).map(v => `<td>${esc(v)}</td>`).join('') + '</tr>';
     });
-    // 평균 행 (엑셀과 동일: 월별 값의 단순 평균)
-    const avgAt = sel => avg(ds.map(d => d ? sel(d) : null));
+    const avgAt = sel2 => avg(ds.map(d => d ? sel2(d) : null));
     const avgRow = [avgAt(d => d.kp), avgAt(d => d.kg), avgAt(d => d.mp), avgAt(d => d.mg), avgAt(d => d.eg),
       null, avgAt(d => d.t1[1]), avgAt(d => d.t1[2]), null, avgAt(d => d.t2[1]), avgAt(d => d.t2[2]), avgAt(d => d.hg),
       avgAt(d => d.r1), avgAt(d => d.r2),
@@ -889,6 +1157,7 @@ function buildGradeChip(){
 }
 
 renderChips();
+fitHeights();
 select(0);
 </script>
 </body>
