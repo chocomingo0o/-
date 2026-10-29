@@ -99,8 +99,14 @@ describe('EVAL_SENT', () => {
     expect(EVAL_SENT.test('비판적 사고력이 돋보임.')).toBe(true);
     expect(EVAL_SENT.test('비판적 사고력이 돋보임')).toBe(true);
     expect(EVAL_SENT.test('수업에 임하는 태도가 매우 우수함.')).toBe(true);
-    expect(EVAL_SENT.test('앞으로의 성장이 기대되는 학생임.')).toBe(true);
+    expect(EVAL_SENT.test('탐구에 임하는 태도가 성실하여 발전이 기대됨.')).toBe(true);
+    expect(EVAL_SENT.test('열정을 지닌 학생임.')).toBe(true);
     expect(EVAL_SENT.test('문제 해결 능력을 갖춤.')).toBe(true);
+  });
+  it('앞머리 명사가 없는 평가 문장은 EVAL_SENT만으로는 못 잡는다(EVAL_RX + 행위 동사 없음 규칙이 보완)', () => {
+    expect(EVAL_SENT.test('앞으로의 성장이 기대되는 학생임.')).toBe(false);
+    expect(EVAL_RX.test('앞으로의 성장이 기대되는 학생임.')).toBe(true);
+    expect(ACTION_VERBS.test('앞으로의 성장이 기대되는 학생임.')).toBe(false);
   });
   it('탐구 문장은 false', () => {
     expect(EVAL_SENT.test('전압을 측정하여 그래프로 나타냄.')).toBe(false);
