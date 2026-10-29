@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import type { ManualEntry, Sem, StudentEntry, Year } from '../engine/types';
 import { fromManual } from '../engine/parser/manual';
+import { CC_AREAS as ALL_CC_AREAS } from '../engine/dict/subjects';
 import { uid } from '../lib/utils';
 
 /**
@@ -10,7 +11,7 @@ import { uid } from '../lib/utils';
  */
 interface Row extends ManualEntry { key: string }
 
-const CC_AREAS = ['자율·자치활동', '동아리활동', '진로활동'];
+const CC_AREAS = ALL_CC_AREAS.slice(0, 3); // 자율·자치, 동아리, 진로
 
 function newRow(prev?: Row): Row {
   return { key: uid('row'), year: prev?.year ?? 1, sem: prev?.sem ?? 1, kind: prev?.kind ?? '세특', subject: '', text: '', ach: '', rank: null };
@@ -62,12 +63,14 @@ export function ManualInput({ onDone, onCancel }: { onDone: (entry: StudentEntry
               <select className="inp w-auto" value={r.year} onChange={(e) => update(r.key, { year: +e.target.value as Year })} aria-label="학년">
                 {[1, 2, 3].map((y) => <option key={y} value={y}>{y}학년</option>)}
               </select>
-              <select className="inp w-auto" value={r.sem ?? 0} onChange={(e) => update(r.key, { sem: (+e.target.value || null) as Sem | null })} aria-label="학기">
-                <option value={1}>1학기</option>
-                <option value={2}>2학기</option>
-                <option value={0}>학년 전체</option>
-              </select>
-              <select className="inp w-auto" value={r.kind} onChange={(e) => update(r.key, { kind: e.target.value as '세특' | '창체', subject: '' })} aria-label="종류">
+              {r.kind === '세특' ? (
+                <select className="inp w-auto" value={r.sem ?? 0} onChange={(e) => update(r.key, { sem: (+e.target.value || null) as Sem | null })} aria-label="학기">
+                  <option value={1}>1학기</option>
+                  <option value={2}>2학기</option>
+                  <option value={0}>학년 전체</option>
+                </select>
+              ) : null}
+              <select className="inp w-auto" value={r.kind} onChange={(e) => { const kind = e.target.value as '세특' | '창체'; update(r.key, { kind, subject: '', sem: kind === '창체' ? null : (r.sem ?? 1) }); }} aria-label="종류">
                 <option value="세특">세특</option>
                 <option value="창체">창체</option>
               </select>
