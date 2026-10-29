@@ -1,34 +1,132 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
-@theme {
-  --font-sans: "Noto Sans KR", "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+/* ─────────────────────────────────────────────────────────────
+   디자인 토큰. 원칙: 흰 바탕, 검정 글자, 가는 회색 선.
+   강조색은 메모지 세 가지(연보라, 노랑, 민트)만 쓴다.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+  --font-sans: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
 
-  --color-primary: #1a2a7a;
-  --color-secondary: #4760e2;
-  --color-accent-green: #59d1ad;
-  --color-accent-blue: #6060cd;
-  --color-border: #e2e8f0;
-  --color-bg-light: #f8fafc;
+  --surface: #ffffff;      /* 카드·표·패널 */
+  --plane: #f5f5f4;        /* 페이지 바탕 */
+  --ink: #1a1a1a;          /* 본문 */
+  --ink-2: #4d4d4d;        /* 보조 */
+  --muted: #8a8a8a;        /* 설명·축 */
+  --hair: #e6e6e6;         /* 구분선 */
+  --hair-2: #cfcfcf;       /* 테두리 */
+  --black: #111111;        /* 기본 버튼·강조 */
+  --ring: rgba(0, 0, 0, 0.10);
+
+  /* 메모지 색(채움)과 그 진한 변형(선·글자) */
+  --note-lavender: #d9bdff; --note-lavender-ink: #7a55d6;
+  --note-yellow:   #f9d96b; --note-yellow-ink:   #c48f0a;
+  --note-mint:     #a9e5bb; --note-mint-ink:     #2f8f57;
+
+  /* 연결 종류 (라벨 칩을 항상 함께 표시한다) */
+  --link-deep: var(--black);              /* 심화 */
+  --link-cross: var(--note-lavender-ink); /* 확장 */
+  --link-shift: var(--note-mint-ink);     /* 전환 */
+  --link-rep: var(--note-yellow-ink);     /* 반복 */
+  --link-con: #a3a3a3;                    /* 동시(같은 시기) */
+
+  /* 양(기록 수) 순차 램프: 연보라 한 색조, 옅음 → 진함 */
+  --seq-100: #f1e8ff; --seq-200: #e2d0ff; --seq-300: #cdb1ff; --seq-400: #b48cff; --seq-500: #9868f0; --seq-600: #7a4fd0; --seq-700: #5c37ad;
+
+  /* 원문 형광펜 */
+  --mark-method: var(--note-yellow);   --mark-method-ink: #1a1a1a;
+  --mark-theme:  var(--note-mint);     --mark-theme-ink:  #1a1a1a;
+  --mark-skill:  var(--note-lavender); --mark-skill-ink:  #1a1a1a;
 }
 
-@layer base {
-  body {
-    @apply font-sans text-slate-900 bg-white;
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface: #1c1c1c; --plane: #111111; --ink: #f2f2f2; --ink-2: #c9c9c9; --muted: #8f8f8f;
+    --hair: #2e2e2e; --hair-2: #3d3d3d; --black: #f2f2f2; --ring: rgba(255, 255, 255, 0.12);
+    --note-lavender: #5b45a8; --note-lavender-ink: #9579f2;
+    --note-yellow: #8a6a10;   --note-yellow-ink: #d7a52a;
+    --note-mint: #2a6b45;     --note-mint-ink: #3faa6b;
+    --link-con: #6f6f6f;
+    --seq-100: #2a2140; --seq-200: #3a2d5e; --seq-300: #4c3a80; --seq-400: #6349a8; --seq-500: #7c5fd0; --seq-600: #9a80ec; --seq-700: #bba6ff;
+    --mark-method-ink: #111; --mark-theme-ink: #111; --mark-skill-ink: #111;
+    --mark-method: #e5c75a; --mark-theme: #7fd49c; --mark-skill: #c1a7ff;
   }
 }
-
-/* Custom scrollbar for technical look */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #1c1c1c; --plane: #111111; --ink: #f2f2f2; --ink-2: #c9c9c9; --muted: #8f8f8f;
+  --hair: #2e2e2e; --hair-2: #3d3d3d; --black: #f2f2f2; --ring: rgba(255, 255, 255, 0.12);
+  --note-lavender: #5b45a8; --note-lavender-ink: #9579f2;
+  --note-yellow: #8a6a10;   --note-yellow-ink: #d7a52a;
+  --note-mint: #2a6b45;     --note-mint-ink: #3faa6b;
+  --link-con: #6f6f6f;
+  --seq-100: #2a2140; --seq-200: #3a2d5e; --seq-300: #4c3a80; --seq-400: #6349a8; --seq-500: #7c5fd0; --seq-600: #9a80ec; --seq-700: #bba6ff;
+  --mark-method-ink: #111; --mark-theme-ink: #111; --mark-skill-ink: #111;
+  --mark-method: #e5c75a; --mark-theme: #7fd49c; --mark-skill: #c1a7ff;
 }
 
-::-webkit-scrollbar-track {
-  @apply bg-slate-100;
+/* Tailwind 4 유틸리티 연결: bg-surface, text-ink, border-hair, bg-note-yellow, text-link-deep … */
+@theme inline {
+  --font-sans: var(--font-sans);
+  --color-surface: var(--surface);
+  --color-plane: var(--plane);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-hair: var(--hair);
+  --color-hair-2: var(--hair-2);
+  --color-black: var(--black);
+  --color-note-lavender: var(--note-lavender);
+  --color-note-lavender-ink: var(--note-lavender-ink);
+  --color-note-yellow: var(--note-yellow);
+  --color-note-yellow-ink: var(--note-yellow-ink);
+  --color-note-mint: var(--note-mint);
+  --color-note-mint-ink: var(--note-mint-ink);
+  --color-link-deep: var(--link-deep);
+  --color-link-cross: var(--link-cross);
+  --color-link-shift: var(--link-shift);
+  --color-link-rep: var(--link-rep);
+  --color-link-con: var(--link-con);
+  --radius-card: 10px;
 }
 
-::-webkit-scrollbar-thumb {
-  @apply bg-slate-300 rounded-full hover:bg-slate-400 transition-colors;
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background: var(--plane);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  word-break: keep-all;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--black); outline-offset: 2px; border-radius: 6px; }
+[hidden] { display: none !important; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* 공통 버튼: 기본은 검정 채움, 보조는 흰 바탕에 가는 테두리 */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--black); background: var(--black); color: var(--surface); font-weight: 600; font-size: 14px; line-height: 1.2; transition: opacity .15s; }
+.btn:hover { opacity: .85; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--hair-2); }
+.btn.ghost:hover { opacity: 1; border-color: var(--ink); }
+.btn.sm { padding: 5px 10px; font-size: 13px; }
+
+/* 패널·카드 */
+.panel { background: var(--surface); border: 1px solid var(--hair); border-radius: var(--radius-card); }
+.hairline { border-color: var(--hair); }
+
+/* 형광펜 */
+mark.m { background: var(--mark-method); color: var(--mark-method-ink); padding: 0 2px; border-radius: 2px; }
+mark.t { background: var(--mark-theme); color: var(--mark-theme-ink); padding: 0 2px; border-radius: 2px; }
+mark.k { background: var(--mark-skill); color: var(--mark-skill-ink); padding: 0 2px; border-radius: 2px; }
+.keysent { border-bottom: 1.5px dashed var(--ink-2); }
+
+@media print {
+  body { background: #fff; color: #000; }
+  .noprint { display: none !important; }
 }

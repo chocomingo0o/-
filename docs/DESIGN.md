@@ -212,7 +212,17 @@ docs/DESIGN.md          이 문서
 6. **표현 사전**: 방법을 못 찾은 활동 문장 목록 → 표현을 방법에 연결(localStorage), 내보내기/가져오기.
 7. 공통: 이름 가리기, 작업 저장(.json)/불러오기, 인쇄(A4 가로), 밝게/어둡게.
 
-색: 연결 종류 4색 + 회색은 검증된 범주형 팔레트에서, 표의 양(기록 수)은 파란색 한 색조 순차 램프, 깊이는 파란색 서열 램프. 범례 항상 표시.
+### 5.1 화면 양식(단순한 팔레트)
+- 흰 바탕(`--surface`), 검정 글자(`--ink`), 가는 회색 선(`--hair`). 그라데이션, 유리 효과, 큰 그림자 없음. 호버에만 옅은 그림자.
+- 버튼: 기본은 검정 채움에 흰 글자(`.btn`), 보조는 흰 바탕에 가는 테두리(`.btn.ghost`). 모서리 6px.
+- 강조색은 메모지 세 가지만: 연보라(`--note-lavender`), 노랑(`--note-yellow`), 민트(`--note-mint`). 각각 진한 변형(`…-ink`)을 선·작은 글자에 쓴다.
+- 교과군(lane)별 색을 두지 않는다. 줄 이름은 굵은 검정 글자와 가는 구분선으로만 구분한다. 카드는 흰 바탕에 1px 테두리, 세특/창체는 작은 글자 태그로 구분.
+- 연결 종류: 심화 검정 실선, 확장 연보라(진함) 실선, 전환 민트(진함) 실선, 반복 노랑(진함) 실선, 동시 회색 점선. 교과군을 건너간 연결은 긴 점선. **선마다 종류 이름 칩을 항상 붙인다**(색만으로 구분하지 않음).
+- 표의 양(기록 수)은 연보라 한 색조 순차 램프(`--seq-100`~`--seq-700`), 깊이 막대는 검정(켜짐)/회색(꺼짐).
+- 원문 형광펜: 방법 표현 노랑, 관심 주제 민트, 과학 탐구 기능 연보라, 핵심 문장은 점선 밑줄.
+- 글꼴 Noto Sans KR(번들). 본문 15px, 카드 제목 15px 굵게, 보조 13px. 가운뎃점은 고유 라벨에만.
+- 반응형: 폰 너비에서 가로 스크롤은 계보도 보드 안에서만. 좌우 여백 16px.
+- 어두운 모드: 같은 토큰을 어두운 값으로 바꾼다(`data-theme` 또는 OS 설정).
 
 ## 6. 품질 기준
 
@@ -220,3 +230,72 @@ docs/DESIGN.md          이 문서
 - 파서: 합성 NEIS 유사 PDF(pdf-lib로 생성, 표 선 사각형 + 글자)로 E2E 테스트. 셀 스트림 단위 테스트.
 - 엔진: 가상 예시 학생으로 깊이·방법·연결 종류가 기대대로 나오는지 스냅샷이 아닌 명시적 단언으로 검증.
 - 과학 서술에 오개념이 없는지, 교사 관찰 시점이 지켜졌는지 리뷰.
+
+## 7. 엔진 모듈 API (구현 계약)
+
+아래 서명대로 구현한다. 모듈 사이 의존은 아래 → 위 방향만(text/methods/records → depth/topic/themes → links/gaps/insights → index).
+
+```ts
+// analyze/text.ts
+export const nos: (s: string) => string;                       // 공백 제거
+export function sentences(text: string): { s: string; a: number; b: number }[];
+export function tokens(text: string, extraStop?: Set<string>): string[];
+export function summarize(s: string, max?: number): string;     // 기본 90
+export function cleanTopic(p: string): string;
+export function validTopic(p: string): boolean;
+export function stripAuthor(q: string): string;                 // '제목 (저자)' → '제목'
+export function jo(word: string, a: string, b: string): string; // 받침에 따라 조사 선택. jo('전압','을','를')→'을', jo('과학','으로','로')→'으로'(ㄹ받침은 '로')
+
+// analyze/methods.ts  (방법·기능·관심 분야 사전 컴파일)
+export interface CompiledMethod { def: MethodDef; re: RegExp; ex: RegExp | null; user: RegExp | null }  // 모두 'g' 플래그, 사용 전 lastIndex=0
+export function compileMethods(userDict?: UserDict): CompiledMethod[];
+export function masked(s: string, cm: CompiledMethod): string;                    // ex 구간을 같은 길이 공백으로
+export function methodHits(s: string, methods: CompiledMethod[]): MethodKey[];
+export function methodMarks(text: string, methods: CompiledMethod[]): { a: number; b: number; key: MethodKey; user: boolean }[];
+export interface CompiledSkill { def: SkillDef; re: RegExp; ex: RegExp | null }
+export function compileSkills(): CompiledSkill[];
+export function skillHits(s: string, skills: CompiledSkill[]): SkillKey[];
+export function skillMarks(text: string, skills: CompiledSkill[]): { a: number; b: number; key: SkillKey }[];
+export function compileFields(): { k: string; re: RegExp }[];                     // 낱말 글자 사이 \s* 허용
+export function fieldsOf(text: string, fields: ReturnType<typeof compileFields>): FieldHit[];  // 서로 다른 낱말 2개 이상 또는 3회 이상 → 상위 3개
+
+// analyze/records.ts
+export function slotT(year: Year, sem: Sem | null): number;
+export function slotIdx(r: { year: Year; sem: Sem | null }): SlotIndex[];        // 학기 없으면 두 칸
+export function semLabel(r: { year: Year; sem: Sem | null }): string;            // '1학년 2학기' | '1학년 (학년 전체)'
+export function buildRecords(S: StudentRecord): Rec[];                           // 분석 필드는 빈 값으로 초기화(sents:[], methods:[], depth:1 …)
+export function subjectStop(S: StudentRecord): Set<string>;                      // 과목명 불용어
+
+// analyze/depth.ts
+export interface Ctx { methods: CompiledMethod[]; skills: CompiledSkill[]; fields: ReturnType<typeof compileFields>; reflect: RegExp; follow: RegExp; inq: RegExp; connect: RegExp; evalRx: RegExp; subjStop: Set<string> }
+export function buildCtx(S: StudentRecord, userDict?: UserDict): Ctx;
+export function analyzeRecord(r: Rec, ctx: Ctx): void;   // sents, methods, methodCounts, depth, key, acts, fuCount, faint, connectCue, tf, ktf, fields, skills, skillCounts 채움
+export const DEPTH_TXT: readonly string[];               // ['', '정리·참여', '조사·분석', '분석·실험', '성찰·확장']
+
+// analyze/themes.ts
+// Stats 타입은 types.ts에 있음
+export function buildStats(recs: Rec[]): Stats;
+export function keywordFn(stats: Stats): (r: Rec) => string[];
+export function buildThemes(recs: Rec[], stats: Stats): Theme[];   // r.themes도 채움
+export const THEME_COLORS: string[];
+
+// analyze/topic.ts
+export function topicOf(r: Rec, kw: (r: Rec) => string[]): { text: string; kind: TopicKind };
+export function assignTopics(recs: Rec[], kw: (r: Rec) => string[]): void;        // topic, topicKind, kw, summary, summaryFu, faint 해제
+
+// analyze/links.ts
+export const LINK_KINDS: Record<LinkKind, { color: string; colorDark: string; cls: string; desc: string; hint: string }>;
+export function buildLinks(recs: Rec[], stats: Stats, themes: Theme[], S: StudentRecord): Link[];
+export function lineage(links: Link[], id: string): { up: Set<string>; down: Set<string> };
+
+// analyze/gaps.ts
+export function buildGaps(recs: Rec[], links: Link[], S: StudentRecord): GapReport;
+
+// analyze/insights.ts
+export function buildInsights(recs: Rec[], links: Link[], themes: Theme[], gaps: GapReport, S: StudentRecord): Insight[];
+
+// analyze/index.ts
+export function analyze(S: StudentRecord, userDict?: UserDict): Analysis;
+export function highlightSegments(r: Rec, an: Analysis, userDict?: UserDict): { a: number; b: number; kind: 'method' | 'theme' | 'skill'; label: string }[];  // 겹침 제거, 원문 순
+export { DEPTH_TXT, LINK_KINDS, lineage, semLabel, slotIdx, compileMethods, methodHits, sentences, summarize };
+```

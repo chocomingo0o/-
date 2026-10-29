@@ -254,6 +254,15 @@ export interface Theme {
   color: string;
 }
 
+/* ───────────────────────── 낱말 통계(연결·주제 계산용) ───────────────────────── */
+export interface Stats {
+  N: number;                               // 기록 수(최소 1)
+  df: Map<string, number>;                 // 낱말이 나온 기록 수
+  kdf: Map<string, number>;                // 낱말이 핵심 문장에 나온 기록 수
+  idf: (t: string) => number;              // ln((N+1)/(df+0.5))
+  cw: (t: string) => number;               // 흔한 낱말 가중치 0.25~1
+}
+
 /* ───────────────────────── 결손 분석 ───────────────────────── */
 /** 학기 칸 번호: 0=1-1, 1=1-2, 2=2-1, 3=2-2, 4=3-1, 5=3-2 */
 export type SlotIndex = 0 | 1 | 2 | 3 | 4 | 5;
