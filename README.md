@@ -1,20 +1,49 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# 탐구분석지도
 
-# Run and deploy your AI Studio app
+학교생활기록부 PDF를 올리면 세부능력 및 특기사항(세특)과 창의적 체험활동(창체)에 적힌 탐구가
+어디서 시작해 어디로 이어졌는지 **한 장의 계보도**로 보여 주고, 학기별 교과별로 **어떤 탐구 방법을 썼고 무엇이 비어 있는지**를
+측정하는 교사용 상담 도구입니다.
 
-This contains everything you need to run your app locally.
+- 학생부는 선생님의 브라우저 안에서만 읽고 분석합니다. 서버, 클라우드, AI 서비스로 보내지 않습니다.
+- 판단은 규칙과 어휘 사전으로 합니다. 모든 판정에는 근거 문장이 함께 나옵니다.
+- 1학년 학생부만 있어도 동작합니다. 세특 초안을 직접 붙여 넣어 점검할 수도 있습니다.
 
-View your app in AI Studio: https://ai.studio/apps/f4052d04-be48-4ff2-9f56-5780f7d057f3
+참고: 박상근 선생님의 [모두의 탐구의 맥](https://park-sanggeun-all.github.io/tamgu-maek/)의 알고리즘(셀 기반 PDF 파서, 사전 기반 방법 탐지, 4단계 깊이, 낱말 공유 기반 연결)을 참고하여 TypeScript로 새로 구현했습니다. 어휘 사전은 자체 작성했습니다.
 
-## Run Locally
+## 주요 기능
 
-**Prerequisites:**  Node.js
+| 화면 | 내용 |
+|---|---|
+| 탐구 계보도 | 가로 학기, 세로 창체와 교과군. 카드 하나가 기록 하나. 연결선마다 심화, 확장, 전환, 반복, 같은 시기 가운데 무엇인지와 연결 이유(공통 낱말, 방법 변화, 깊이 변화)를 보여 줍니다. |
+| 탐구 방법 | 17가지 탐구 방법을 학기별, 교과군별로 센 표와 8가지 과학 탐구 과정 기능 표. **결손 지도**가 학기별, 교과군별로 비어 있는 방법과 다음 탐구 제안을 짚어 줍니다. 칸을 누르면 근거 문장이 열립니다. |
+| 상담 노트 | 강점, 점검, 질문, 방향으로 나눈 자동 상담 포인트와 메모. |
+| 표현 사전 | 방법을 찾지 못한 활동 문장을 보고 학교에서 쓰는 표현을 사전에 더할 수 있습니다(이 컴퓨터에만 저장). |
 
+## 실행
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+npm install
+npm run dev      # http://localhost:3000
+npm run check    # 타입체크 + 테스트 + 빌드
+```
+
+GitHub Pages 배포: 저장소 Settings → Pages → Source를 **GitHub Actions**로 바꾸면 `main`에 푸시할 때마다 `.github/workflows/deploy.yml`이 빌드해 올립니다.
+
+## 폴더
+
+```
+src/engine/   분석 엔진(브라우저와 Node에서 모두 동작, DOM 의존 없음)
+  dict/       어휘 사전: 탐구 방법 17종, 성찰·후속·연결 패턴, 관심 분야, 과학 탐구 과정 기능, 불용어, 과목·교과군
+  parser/     NEIS 학생부 PDF 파서(셀 → 섹션 → 학생 데이터), 한 반 묶음 분리, 직접 입력
+  pdf/        pdf.js로 글자와 표 선 추출
+  analyze/    문장·방법·깊이·주제·관심 주제·연결·결손·상담 포인트
+src/components/  화면
+src/fixtures/    가상 예시 학생
+docs/DESIGN.md   설계 명세(규칙과 기준이 모두 적혀 있음)
+```
+
+## 알아 두실 점
+
+- 스캔한 이미지 PDF는 글자 정보가 없어 읽을 수 없습니다. NEIS에서 PDF로 저장한 파일을 올려 주세요.
+- 판단은 문장에 쓰인 표현을 근거로 합니다. 표현이 평범하면 낮게, 화려하면 높게 나올 수 있습니다. 계보도는 참고 자료이며 원문과 함께 보고 학생에게 직접 확인해 주세요.
+- 작업 저장 파일(.json)과 인쇄물에는 학생 개인정보가 들어 있습니다. 학교 지침에 따라 보관하고 파기해 주세요. 이 저장소에 학생부 PDF나 작업 파일을 올리지 마세요.
