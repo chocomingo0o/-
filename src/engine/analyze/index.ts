@@ -10,8 +10,8 @@
  *   analyzeRecord  기록마다 문장 점수, 방법, 깊이, 핵심 문장, 활동 흐름, 낱말 빈도, 관심 분야, 탐구 기능
  *   buildStats     낱말 통계(df, kdf, idf, cw)
  *   keywordFn      기록 핵심어 함수
- *   assignTopics   주제, 핵심어, 요약(주제가 핵심어 외로 잡히면 약한 기록 표시 해제)
  *   buildThemes    여러 기록에 걸친 관심 주제(r.themes도 채움)
+ *   assignTopics   주제, 핵심어, 요약(주제가 핵심어 외로 잡히면 약한 기록 표시 해제). 관심 주제 낱말이 든 활동을 주제 후보로 앞세운다
  *   buildLinks     기록 사이 연결과 연결 이유
  *   buildGaps      결손 분석(학기·교과군 × 방법, 과학 탐구 기능, 제안)
  *   buildInsights  상담 포인트
@@ -45,8 +45,8 @@ export function analyze(S: StudentRecord, userDict?: UserDict): Analysis {
 
   const stats = buildStats(recs);
   const kw = keywordFn(stats);
-  assignTopics(recs, kw);
   const themes = buildThemes(recs, stats);
+  assignTopics(recs, kw, themes);
   const links = buildLinks(recs, stats, themes, S);
   const gaps = buildGaps(recs, links, S);
   const insights = buildInsights(recs, links, themes, gaps, S);

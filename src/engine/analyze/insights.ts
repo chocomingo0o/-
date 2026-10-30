@@ -5,21 +5,26 @@
  * 태그: 's' 강점, 'g' 점검, 'd' 방향, 'q' 학생에게 할 질문.
  *
  * 항목(만드는 순서)
- *  s  관통 주제: 관심 주제가 2개 이상 교과군에 걸쳐 이어짐(상위 3개 주제만 본다)
+ *  s  관통 주제: 관심 주제가 2개 이상 교과군에 걸쳐 이어짐(상위 3개 주제만 본다). 주제가 둘 이상이면
+ *     '관심 주제 N개가 …에서 이어집니다: ‘A’(교과군…), ‘B’(…).' 한 문장으로 합쳐 강점 칸이 비슷한 문장으로 차지 않게 한다(th는 첫 주제)
  *  s  가장 긴 계보: 뒤로 이어지는 연결이 없는 기록 가운데 앞으로 거슬러 올라가는 가장 긴 한 줄(같은 시기 연결은 빼고)이
  *     기록 3건 이상인 것. 조상 전체 수가 아니라 한 줄로 이어진 기록 수를 말한다
- *  g  깊이 정체: 한 관심 주제의 기록이 3개 이상인데 뒤 절반의 평균 깊이가 앞 절반보다 늘지 않음(최대 2개)
+ *  g  깊이 정체: 한 관심 주제의 기록이 4개 이상이고 주제 낱말이 둘 이상(또는 관심 분야 낱말)인데, 뒤 절반의 평균 깊이가
+ *     앞 절반보다 늘지 않음(최대 2개). 앞이나 뒤 절반의 평균이 3.5 이상이면 이미 깊으므로 만들지 않는다
  *  g  방법 편중: gaps.ts의 methodBias(전체 6번 이상, 한 방법 30% 초과, 3단계 아님). 결손 분석과 같은 문장이므로 합칠 때 하나로 남는다
- *  d  아직 안 쓴 3단계 방법: 3단계 여섯 방법 가운데 안 쓴 것이 1~4개일 때(5개 이상이면 교과군 결손 제안이 이미 다룸)
+ *  d  아직 안 쓴 3단계 방법: 3단계 여섯 방법 가운데 안 쓴 것이 1~4개일 때(5개 이상이면 교과군 결손 제안이 이미 다룸).
+ *     문장에서는 탐구 깊이(1~4단계)와 헷갈리지 않게 '수준 3 방법'으로 부르고, 남은 방법이 진로와 맞는다고 단정하지 않는다
  *  g  과학 기록에 실험·측정 없음: 과학 교과군 기록(약한 기록 제외) 2개 이상인데 실험·측정이 없음.
  *     결손 분석이 이미 과학 교과군의 실험·측정 결손을 제안했으면 겹치므로 내지 않는다
  *  d  후속 없는 깊은 탐구: 깊이 3 이상, 주제가 핵심어뿐이 아니고, 예체능이 아니고, 뒤로 이어지는 연결이 없는 기록(최대 2개).
  *     가장 최근 학기 기록은 아직 후속이 있을 수 없으므로 빼고, 3학년 기록도 뺀다.
  *     '최근'은 학기 단위(Math.floor(t))로 본다. 학기 없는 창체(t=학년×2−1.5)가 있어도 같은 학년의 마지막 학기 세특이 최근이다
- *  s  심화 연결 수(예 2개), g 반복 연결 수(예 2개), g 연결 4개 이상인데 심화가 없음
+ *  s  심화 연결 수(예 2개: 직접 언급 > 공통 관심 주제 > 점수 순으로 고름), g 반복 연결 수(예 2개, 괄호에 관심 주제 이름),
+ *  g  연결 4개 이상인데 심화가 없음
  *  s/d 진로 희망 분야와 맞닿은 기록 비율(40% 이상이면 강점, 아니면 방향). 희망 문구의 분야는 gaps.ts의 hopeFields로 판정
  *  s/q 진로 희망 변화: 분야가 같거나 문구가 비슷하면 유지(s), 아니면 바뀜(q)
- *  q  질문 2개: 가장 긴 줄기의 출발 기록과 끝 기록을 잇는 질문, 연결이 하나도 없는 깊은 탐구의 계기를 묻는 질문.
+ *  q  질문 2개: 가장 긴 계보의 끝 기록으로 바로 들어오는 연결(직접 언급이나 공통 관심 주제가 있는 것, 계보의 바로 앞 기록이 먼저)
+ *     가운데 하나의 출발 기록과 끝 기록을 잇는 질문(그런 연결이 없으면 계보의 뿌리 기록), 연결이 하나도 없는 깊은 탐구의 계기를 묻는 질문.
  *     둘이 안 모이면 깊이가 가장 큰 기록으로 질문을 채운다
  *  결손 분석의 제안(gaps.suggestions)은 그대로 'd'/'g'로 합친다.
  *
@@ -30,6 +35,7 @@
  */
 import type { GapReport, Insight, Link, MethodKey, Rec, StudentRecord, Theme } from '../types';
 import { METHOD, METHODS } from '../dict/methods';
+import { FIELD_TERMS } from '../dict/fields';
 import { semLabel } from './records';
 import { jo, nos } from './text';
 import { hopeFields, methodBias, methodBiasText } from './gaps';
@@ -61,7 +67,8 @@ function avgDepth(rs: Rec[]): number {
 /**
  * 이 기록에서 앞으로 거슬러 올라가는 가장 긴 한 줄(기록 id 목록, 뿌리부터 이 기록까지). 같은 시기 연결 '동시'는 줄기로 보지 않는다.
  * 갈라진 조상을 모두 세지 않고 한 줄의 길이만 재므로 '기록 N건이 한 줄로 이어짐'으로 말할 수 있다.
- * 연결은 앞 → 뒤(t가 같거나 커지는 방향)로만 만들어지므로 순환은 없지만, 혹시 있어도 멈추도록 방문 표시를 둔다.
+ * 연결은 대개 앞 → 뒤(t가 같거나 커지는 방향)로 만들어지지만, 같은 학년의 창체를 언급한 세특은 창체 → 세특으로 뒤집히므로
+ * (links.ts '연결 방향') 순환이 생겨도 멈추도록 방문 표시를 둔다.
  */
 function longestChain(links: Link[], id: string): string[] {
   const memo = new Map<string, string[]>();
@@ -114,19 +121,34 @@ export function buildInsights(recs: Rec[], links: Link[], themes: Theme[], gaps:
   // 가장 최근 학기(학기 단위). 학기 없는 창체(t=2.5)가 있어도 2학년 1학기(t=2) 세특은 최근 기록이다
   const latestSlot = all.length ? Math.floor(Math.max(...all.map((r) => r.t))) : 0;
 
-  /* 관통 주제 */
-  for (const th of ths.slice(0, 3)) {
-    const rs = th.ids.map((i) => byId.get(i)).filter((r): r is Rec => !!r);
-    const lanes = [...new Set(rs.map((r) => r.lane))];
-    const ys = [...new Set(rs.map((r) => r.year))].sort((a, b) => a - b);
-    if (lanes.length >= 2) {
-      const laneList = `${lanes.slice(0, 5).join(', ')}${lanes.length > 5 ? ' 등' : ''}`;
-      out.push({
-        tg: 's',
-        th: th.name,
-        t: `‘${th.name}’ 주제가 ${ys.join('·')}학년에 걸쳐 ${laneList} ${lanes.length}개 교과군에서 이어집니다.`,
-      });
-    }
+  /* 관통 주제: 하나면 한 문장, 둘 이상이면 합쳐 한 문장(강점 칸이 비슷한 문장 셋으로 차지 않게) */
+  const spanning = ths
+    .slice(0, 3)
+    .map((th) => {
+      const rs = th.ids.map((i) => byId.get(i)).filter((r): r is Rec => !!r);
+      const lanes = [...new Set(rs.map((r) => r.lane))];
+      const ys = [...new Set(rs.map((r) => r.year))].sort((a, b) => a - b);
+      return { th, lanes, ys };
+    })
+    .filter((x) => x.lanes.length >= 2);
+  if (spanning.length === 1) {
+    const { th, lanes, ys } = spanning[0];
+    const laneList = `${lanes.slice(0, 5).join(', ')}${lanes.length > 5 ? ' 등' : ''}`;
+    out.push({
+      tg: 's',
+      th: th.name,
+      t: `‘${th.name}’ 주제가 ${ys.join('·')}학년에 걸쳐 ${laneList} ${lanes.length}개 교과군에서 이어집니다.`,
+    });
+  } else if (spanning.length >= 2) {
+    const items = spanning.map(
+      ({ th, lanes }) => `‘${th.name}’(${lanes.slice(0, 5).join(', ')}${lanes.length > 5 ? ` 등 ${lanes.length}개` : ''})`,
+    );
+    const allYs = [...new Set(spanning.flatMap((x) => x.ys))].sort((a, b) => a - b);
+    out.push({
+      tg: 's',
+      th: spanning[0].th.name,
+      t: `관심 주제 ${spanning.length}개가 ${allYs.join('·')}학년에 걸쳐 두 개 이상의 교과군에서 이어집니다: ${items.join(', ')}.`,
+    });
   }
 
   /* 가장 긴 계보: 뒤로 이어지지 않는 기록 가운데 거슬러 올라가는 한 줄이 가장 긴 것(기록 3건 이상) */
@@ -140,23 +162,24 @@ export function buildInsights(recs: Rec[], links: Link[], themes: Theme[], gaps:
     out.push({
       tg: 's',
       go: best.r.id,
-      t: `가장 긴 탐구 줄기는 기록 ${best.chain.length}건이 한 줄로 이어진 것으로, ${placeOf(best.r)}에서 끝납니다.`,
+      t: `가장 긴 탐구 계보는 기록 ${best.chain.length}건이 한 줄로 이어진 것으로, ${placeOf(best.r)}에서 끝납니다.`,
     });
   }
 
-  /* 깊이 정체 */
+  /* 깊이 정체: 기록 4건 이상, 낱말이 둘 이상이거나 관심 분야 낱말인 주제만. 앞·뒤 절반 평균이 3.5 이상이면 이미 깊으니 내지 않는다 */
   let stag = 0;
   for (const th of ths) {
     if (stag >= 2) break;
+    if (th.words.length < 2 && !FIELD_TERMS.has(th.name)) continue;
     const rs = th.ids
       .map((i) => byId.get(i))
       .filter((r): r is Rec => !!r && !r.faint)
       .sort((a, b) => a.t - b.t);
-    if (rs.length < 3) continue;
+    if (rs.length < 4) continue;
     const half = Math.ceil(rs.length / 2);
     const fa = avgDepth(rs.slice(0, half));
     const la = avgDepth(rs.slice(half));
-    if (la <= fa + 0.1) {
+    if (la <= fa && fa < 3.5 && la < 3.5) {
       stag++;
       out.push({
         tg: 'g',
@@ -176,7 +199,7 @@ export function buildInsights(recs: Rec[], links: Link[], themes: Theme[], gaps:
   if (lv3Missing.length >= 1 && lv3Missing.length <= 4) {
     out.push({
       tg: 'd',
-      t: `아직 쓰지 않은 3단계 방법: ${lv3Missing.map((m) => m.label).join(', ')}. 진로와 맞는 방법을 골라 다음 탐구에 넣어 볼 수 있습니다.`,
+      t: `아직 쓰지 않은 수준 3 방법: ${lv3Missing.map((m) => m.label).join(', ')}. 진로나 탐구 질문에 맞는 방법이 있으면 다음 탐구에 넣어 볼 수 있습니다.`,
     });
   }
 
@@ -209,16 +232,25 @@ export function buildInsights(recs: Rec[], links: Link[], themes: Theme[], gaps:
   const deepL = lk.filter((l) => l.rel === '심화' && byId.has(l.from) && byId.has(l.to));
   const repL = lk.filter((l) => l.rel === '반복' && byId.has(l.from) && byId.has(l.to));
   if (deepL.length) {
+    // 예시는 배열 순서가 아니라 직접 언급 > 공통 관심 주제 > 점수 순으로 가장 뚜렷한 연결 두 개
+    const ex = deepL
+      .slice()
+      .sort((x, y) => Number(y.cite) - Number(x.cite) || Number(!!y.theme) - Number(!!x.theme) || y.sc - x.sc)
+      .slice(0, 2);
     out.push({
       tg: 's',
-      go: deepL[0].to,
-      t: `더 깊은 방법으로 이어진 ‘심화’ 연결이 ${deepL.length}개 있습니다. 예: ${deepL.slice(0, 2).map((l) => `${subjOf(l.from)} → ${subjOf(l.to)}`).join(', ')}.`,
+      go: ex[0].to,
+      t: `더 깊은 방법으로 이어진 ‘심화’ 연결이 ${deepL.length}개 있습니다. 예: ${ex.map((l) => `${subjOf(l.from)} → ${subjOf(l.to)}`).join(', ')}.`,
     });
   }
   if (repL.length) {
+    // 괄호에는 공통 관심 주제 이름을, 없으면 첫 공통 낱말을 적는다
     const ex = repL
       .slice(0, 2)
-      .map((l) => `${subjOf(l.from)} → ${subjOf(l.to)}${l.words?.[0] ? `(${l.words[0]})` : ''}`)
+      .map((l) => {
+        const w = l.theme ?? l.words?.[0];
+        return `${subjOf(l.from)} → ${subjOf(l.to)}${w ? `(${w})` : ''}`;
+      })
       .join(', ');
     out.push({
       tg: 'g',
@@ -273,11 +305,22 @@ export function buildInsights(recs: Rec[], links: Link[], themes: Theme[], gaps:
   const questions: Insight[] = [];
   const usedQ = new Set<string>();
   if (best) {
-    // 줄기의 출발점: 가장 긴 한 줄의 뿌리부터 차례로, 주제가 핵심어뿐이 아닌 첫 기록
-    const start = best.chain
-      .slice(0, -1)
-      .map((i) => byId.get(i))
+    // 질문의 출발점: 끝 기록으로 바로 들어오는 연결 가운데 직접 언급이나 공통 관심 주제가 있는 것(학생이 답할 수 있는 한 걸음).
+    // 없으면 가장 긴 한 줄의 뿌리부터 차례로. 어느 쪽이든 주제가 핵심어뿐인 기록은 건너뛴다
+    // 계보의 바로 앞 기록이 그런 연결이면 그것을 먼저 쓴다
+    const endId = best.r.id;
+    const prevId = best.chain[best.chain.length - 2];
+    const direct = lk
+      .filter((l) => l.to === endId && l.rel !== '동시' && (l.cite || l.theme))
+      .sort((x, y) => Number(y.from === prevId) - Number(x.from === prevId) || Number(y.cite) - Number(x.cite) || y.sc - x.sc)
+      .map((l) => byId.get(l.from))
       .find((r): r is Rec => !!r && r.topicKind !== 'k');
+    const start =
+      direct ??
+      best.chain
+        .slice(0, -1)
+        .map((i) => byId.get(i))
+        .find((r): r is Rec => !!r && r.topicKind !== 'k');
     if (start) {
       usedQ.add(start.id);
       questions.push({

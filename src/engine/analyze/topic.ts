@@ -25,8 +25,9 @@
  * 정규식에 'g' 플래그를 쓰지 않으므로 lastIndex 걱정 없이 exec()를 반복해도 된다.
  * 이 파일은 DOM에 의존하지 않는다.
  */
-import type { Act, Rec, Sent, TopicKind } from '../types';
-import { clauseBroken, cleanTopic, nos, stripAuthor, summarize, validTopic } from './text';
+import type { Act, Rec, Sent, Theme, TopicKind } from '../types';
+import { EVAL_SENT } from '../dict/patterns';
+import { clauseBroken, cleanTopic, nos, sentences, stripAuthor, summarize, validTopic } from './text';
 
 export interface TopicResult {
   text: string;
@@ -46,8 +47,10 @@ const Q_TOPIC = new RegExp(
   `${OPEN}(${INNER}{4,60})${CLOSE}\\s*(?:이?라는|을|를|의|에\\s*대해|에\\s*대한)?\\s*(?:주제|질문|탐구|문제|물음|의문|보고서|심화\\s*탐구)`,
 );
 
-/** ② ‘…’에 참여 / ‘…’ 프로젝트에 / ‘…’ 활동에 참여 / ‘…’를 주제로 */
-const Q_JOIN = new RegExp(`${OPEN}(${INNER}{5,60})${CLOSE}\\s*(?:에\\s*참여|프로젝트에|활동에\\s*참여|를\\s*주제로|을\\s*주제로)`);
+/** ② ‘…’에 참여 / ‘…’ 프로젝트에 / ‘…’ 활동에 참여 / ‘…’를 주제로 / ‘…’를 논제로 / ‘…’ 제목으로 */
+const Q_JOIN = new RegExp(
+  `${OPEN}(${INNER}{5,60})${CLOSE}\\s*(?:에\\s*참여|프로젝트에|활동에\\s*참여|를\\s*주제로|을\\s*주제로|를\\s*논제로|을\\s*논제로|주제로\\s*한|제목으로)`,
+);
 
 /** ③ ‘…’(이)라는 제목, ‘…’의 제목 */
 const Q_TITLE = new RegExp(`${OPEN}(${INNER}{3,50})${CLOSE}\\s*(?:이?라는|의)\\s*제목`);
@@ -67,14 +70,17 @@ const AUTHOR_TAIL = /\([가-힣\s]{2,12}\)$/;
 
 /* ───────────────────────── 핵심 문장에 적용하는 패턴 ───────────────────────── */
 
-/** ⑤ 탐구 주제답게 끝나는 명사구. '…에 미치는 영향', '…의 상관관계', '…의 원리', '…해결 방안' 등 */
+/**
+ * ⑤ 탐구 주제답게 끝나는 명사구. '…에 미치는 영향', '…에 영향을 주는 요인', '…의 상관관계', '…와의 관계', '…의 원리', '…해결 방안' 등.
+ * 맨몸 '…의 관계'는 넣지 않는다('물질대사와 효소의 관계를 학습하고'처럼 배운 내용에도 흔히 나온다).
+ */
 const P_NOUN = new RegExp(
-  '([^,.‘’\'"]{4,44}?(?:에\\s*미치는\\s*영향|의\\s*상관관계|와의\\s*관계|과의\\s*관계|의\\s*원리|의\\s*효과|의\\s*실태|의\\s*필요성|' +
+  '([^,.‘’\'"]{4,44}?(?:에\\s*미치는\\s*영향|에\\s*영향을\\s*(?:주는|미치는)\\s*요인|의\\s*상관관계|와의\\s*관계|과의\\s*관계|의\\s*원리|의\\s*효과|의\\s*실태|의\\s*필요성|' +
     '개선\\s*방안|해결\\s*방안|의\\s*차이|의\\s*변화|의\\s*역할|의\\s*문제점|의\\s*한계와\\s*가능성|의\\s*메커니즘|의\\s*작용\\s*기전|' +
     '의\\s*활용\\s*방안|에\\s*따른\\s*[가-힣]{2,6}\\s*변화))',
 );
 /** ⑤의 명사구에서 꼬리를 떼면 앞머리(탐구 대상)가 남는다. 앞머리가 두 낱말 이상이어야 주제로 본다. */
-const P_NOUN_TAIL = /(?:에\s*미치는\s*영향|의\s*[가-힣]+|개선\s*방안|해결\s*방안|에\s*따른.*)$/;
+const P_NOUN_TAIL = /(?:에\s*미치는\s*영향|에\s*영향을\s*(?:주는|미치는)\s*요인|의\s*[가-힣]+|개선\s*방안|해결\s*방안|에\s*따른.*)$/;
 /** 앞머리가 이런 말로 시작하면 주제가 아니라 활동 설명이다 */
 const P_NOUN_BAD_HEAD = /^(?:실질적|구체적|발생|학교생활|다양한|여러|각|이|그)/;
 /**
@@ -140,7 +146,21 @@ function validQuoted(p: string): boolean {
  * 명사구는 낱말 경계에서 시작해야 한다. 그렇지 않으면 46자 제한 때문에 '…네 개의 값을 …' 같은 문장 중간
  * ('개의 값을 되풀이한다는 …')에서 잘려 시작한 조각이 주제가 된다. 앞에 붙은 활동 절('…을 정리해 ')은 P_NOUN_CLAUSE로 뗀다.
  */
-const ACT_OBJECT = /(?:^|(?<=\s))([^,.]{4,46}?)(?:을|를)\s*(?:주제로|탐구|분석|조사|비교|설명|정리|제작|설계|측정|실험|발표|제안|해석|모델링|근사|연구|살펴|알아|탐색|규명|고찰)/;
+const ACT_OBJECT = /(?:^|(?<=\s))([^,.]{4,46}?)(?:을|를)\s*(?:주제로|탐구|분석|조사|비교|설명|정리|제작|설계|측정|실험|발표|제안|해석|모델링|근사|연구|살펴|알아|탐색|규명|고찰|관찰|시각화|계산|기록|추론|내려받)/;
+/** 활동 요약 앞머리의 단원 표시('데이터 단원에서 ', '물질과 규칙성 단원에서 ')는 뗀 뒤 명사구를 찾는다(46자 제한에 걸리지 않게). */
+const UNIT_PREFIX = /^(?:[^\s,.]+\s+){0,3}단원(?:에서|의)?\s+/;
+
+/**
+ * 활동 요약에서 '…을 탐구/측정…' 앞의 명사구를 찾는다(앞머리의 단원 표시는 뗀 뒤 한 번만 찾는다).
+ * 잡힌 구가 절이면 버린다. 뒤쪽 어절만 잘라 다시 찾으면 '윗몸 말아 올리기 기록' → '올리기 기록'처럼 뜻이 깨진 조각이 남는다.
+ * 6자 미만이면 쓰지 않는다.
+ */
+function objectPhrase(text: string): string | null {
+  const mm = ACT_OBJECT.exec(text.replace(UNIT_PREFIX, ''));
+  if (!mm) return null;
+  const c = cleanTopic(mm[1]).replace(P_NOUN_CLAUSE, '').trim();
+  return validTopic(c) && c.length >= 6 ? c : null;
+}
 
 /** 핵심 문장을 주제로 쓸 때 첫 절만 남기기 위한 구분점(쉼표, '…하며 ', '…하고 ' 등) */
 const CLAUSE_SPLIT = /,|(?:하며|하고|하여|하면서|으며|이며)\s/;
@@ -153,6 +173,13 @@ const LEAD_PRONOUN = /^(?:그|이|저|이러한|그러한|이런|그런)\s+/;
 /** 핵심 문장을 점수 내림차순으로. 점수가 같으면 원문 순서를 지킨다. */
 function keysByScore(r: Rec): Sent[] {
   return (r.key ?? []).slice().sort((x, y) => y.sc - x.sc);
+}
+
+/** 핵심 문장이 아닌 나머지 문장(⑨에서 따옴표를 더 찾아볼 때). r.sents가 비어 있으면 본문을 다시 나눈다. */
+function otherSentences(r: Rec, keys: Sent[]): { s: string }[] {
+  const all: { s: string }[] = r.sents?.length ? r.sents : sentences(r.text ?? '');
+  const used = new Set(keys.map((k) => k.s));
+  return all.filter((o) => !used.has(o.s));
 }
 
 /**
@@ -249,8 +276,8 @@ export function topicOf(r: Rec, kw: (r: Rec) => string[]): TopicResult {
     if (validQuoted(c)) return { text: c, kind: 'q' };
   }
 
-  // ⑨ 핵심 문장 안의 아무 따옴표. '제목 (저자)'이거나 바로 뒤에 '읽고' 등이 오면 책
-  for (const ks of keys) {
+  // ⑨ 핵심 문장 안의 아무 따옴표(핵심 문장에 없으면 나머지 문장도). '제목 (저자)'이거나 바로 뒤에 '읽고' 등이 오면 책
+  for (const ks of [...keys, ...otherSentences(r, keys)]) {
     const q = Q_ANY.exec(ks.s);
     if (!q) continue;
     const raw = q[1].trim();
@@ -278,7 +305,9 @@ export function topicOf(r: Rec, kw: (r: Rec) => string[]): TopicResult {
  * 1. topicOf로 topic, topicKind를 정하고 kw(핵심어 3개)를 채운다.
  *    주제가 핵심어 외('q', 'p', 'b')로 잡힌 기록은 faint(약한 기록) 표시를 푼다.
  * 2. 주제가 핵심어뿐('k')이고 활동 흐름(acts)이 있으면 활동 요약에서 주제를 다시 고른다.
- *    - 활동 요약 안의 '…을 탐구/분석/측정…' 앞 명사구(6자 이상, 앞의 활동 절은 뗀 뒤)가 있으면 그것을 'p'로
+ *    활동이 여러 개면 그 기록의 관심 주제 낱말(themes의 words)이 든 활동을 먼저 본다.
+ *    - 활동 요약 안의 '…을 탐구/분석/측정…' 앞 명사구(6자 이상, 앞의 단원 표시와 활동 절은 뗀 뒤)가 있으면 그것을 'p'로.
+ *      점수가 가장 높은 활동의 절반에 못 미치는 곁가지 활동은 보지 않는다
  *    - 없으면 점수가 가장 높은 활동 요약의 첫 절(8~48자)을 's'로. 첫 절이 너무 길면 44자로 줄인 요약을 쓰되,
  *      줄이다가 말줄임표로 잘리면('…실험의…') 문장 조각이 되므로 그대로 핵심어('k')에 머문다.
  *      앞머리의 지시어('그 ', '이 ')는 뗀다
@@ -286,8 +315,10 @@ export function topicOf(r: Rec, kw: (r: Rec) => string[]): TopicResult {
  *    (풀면 활동 흐름이 있는 모든 기록이 약한 기록에서 벗어나 표시의 의미가 없어진다).
  * 3. summary: 주제로 쓴 활동이 아니고 주제 앞 8자를 품지 않은 활동 가운데,
  *    후속 탐구(fu)가 있으면 그것을(summaryFu=true), 없으면 점수가 가장 높고 14자 이상인 것을 80자로 요약한다.
+ *    교사의 총평 문장(EVAL_SENT: '…자료를 찾아 발표하는 데 익숙함')은 요약으로 쓰지 않는다.
+ * themes는 buildThemes가 만든 관심 주제(선택). 주면 그 기록의 주제 낱말이 든 활동을 먼저 본다.
  */
-export function assignTopics(recs: Rec[], kw: (r: Rec) => string[]): void {
+export function assignTopics(recs: Rec[], kw: (r: Rec) => string[], themes: Theme[] = []): void {
   for (const r of recs) {
     const tp = topicOf(r, kw);
     r.topic = tp.text;
@@ -297,16 +328,21 @@ export function assignTopics(recs: Rec[], kw: (r: Rec) => string[]): void {
 
     const acts: Act[] = r.acts ?? [];
     const byScore = acts.slice().sort((x, y) => y.sc - x.sc);
+    // 관심 주제 낱말이 든 활동을 앞세운다(점수 순은 그 안에서 유지)
+    const themeWords = themes.filter((th) => th.ids.includes(r.id)).flatMap((th) => th.words);
+    const hasTheme = (a: Act): boolean => themeWords.some((w) => a.text.includes(w));
+    const preferred = themeWords.length ? [...byScore.filter(hasTheme), ...byScore.filter((a) => !hasTheme(a))] : byScore;
     let used: Act | null = null;
 
-    if (tp.kind === 'k' && byScore[0]) {
-      used = byScore[0];
+    if (tp.kind === 'k' && preferred[0]) {
+      used = preferred[0];
       let np: string | null = null;
-      for (const a of byScore) {
-        const mm = ACT_OBJECT.exec(a.text);
-        if (!mm) continue;
-        const c = cleanTopic(mm[1]).replace(P_NOUN_CLAUSE, '').trim();
-        if (validTopic(c) && c.length >= 6) {
+      // 점수가 가장 높은 활동의 절반에 못 미치는 곁가지 활동('개인정보 보호 사례를 조사해 발표함')에서는 주제를 뽑지 않는다
+      const floor = byScore[0].sc * 0.5;
+      for (const a of preferred) {
+        if (a.sc < floor) continue;
+        const c = objectPhrase(a.text);
+        if (c) {
           np = c;
           used = a;
           break;
@@ -334,8 +370,9 @@ export function assignTopics(recs: Rec[], kw: (r: Rec) => string[]): void {
     // 주제와 겹치지 않는 활동을 요약으로. 후속 탐구가 있으면 그것을 먼저 고른다.
     const core = nos(r.topic).replace(/…$/, '').slice(0, 8);
     const overlaps = (a: Act): boolean => core.length > 0 && nos(a.text).includes(core);
-    const fuAct = acts.find((a) => a.fu && a !== used && !overlaps(a));
-    const pick = fuAct ?? byScore.find((a) => a !== used && a.text.length >= 14 && !overlaps(a));
+    const isEval = (a: Act): boolean => EVAL_SENT.test(a.text.trim());
+    const fuAct = acts.find((a) => a.fu && a !== used && !overlaps(a) && !isEval(a));
+    const pick = fuAct ?? byScore.find((a) => a !== used && a.text.length >= 14 && !overlaps(a) && !isEval(a));
     r.summary = pick ? summarize(pick.text, 80) : '';
     r.summaryFu = !!fuAct;
   }

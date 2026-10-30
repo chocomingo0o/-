@@ -12,9 +12,10 @@
  *        평가 문장 = EVAL_SENT에 맞거나, 평가 어휘(EVAL_WORDS)가 있고 행위 동사(ACTION_VERBS)가 없는 문장.
  *        문장 전체가 평가(EVAL_SENT)이면서 행위 동사도 없으면('비판적 사고력이 돋보임.') 평가 어휘에 걸린 1·2단계 방법
  *        (비판→비교·비평, 사고→개념 분석·해석 등)은 모두 빼고, 직접 활동의 근거가 분명한 3단계 방법만 남긴다.
- *   rf = 성찰 단서(한계, 오차, 개선, 재실험 …)가 있는지
+ *   rf = 성찰 단서(한계, 오차, 개선, 재실험 …)가 있는지. 문장 전체가 평가(EVAL_SENT, 행위 동사 없음)이면 거짓
  *   sc = Σ(방법: 3단계면 2, 아니면 1) + (rf면 2) + (탐구 동사 있으면 1) + (따옴표 있으면 0.5)
- *   fu = 첫 문장이 아니고, 후속 단서(더 나아가, 추가로 탐구, 궁금해져 …)가 있고, sc>=1 또는 탐구 동사가 있음
+ *   fu = 첫 문장이 아니고, 평가 어휘가 없는 활동 문장이고(evalKind 'none'), 후속 단서(더 나아가, 추가로 탐구, 궁금해져 …)가 있고,
+ *        sc>=1 또는 탐구 동사가 있음
  *   skills = 과학 탐구 과정 기능 탐지 결과
  *  기록
  *   methods = 문장 방법 합집합(수준 내림차순, 같은 수준이면 빈도 내림차순, 그래도 같으면 사전 순)
@@ -135,16 +136,18 @@ function best(scored: Sent[]): Sent | null {
  * 문장 하나를 점수 매긴다. i는 기록 안에서의 문장 순서(0부터). 첫 문장은 후속(fu)이 될 수 없다.
  */
 function scoreSentence(o: { s: string; a: number; b: number }, i: number, ctx: Ctx): Sent {
+  const ek = evalKind(o.s, ctx);
   let ms = methodHits(o.s, ctx.methods);
   if (ms.length) {
-    const ek = evalKind(o.s, ctx);
     if (ek === 'whole') ms = ms.filter((k) => lvOf(k) >= 3);
     else if (ek === 'soft') ms = ms.filter((k) => !EVAL_DROP.has(k));
   }
-  const rf = hit(ctx.reflect, o.s);
+  // 문장 전체가 평가('…디버깅 습관이 돋보임')이면 그 안의 성찰 단서는 학생의 성찰 활동이 아니다
+  const rf = ek !== 'whole' && hit(ctx.reflect, o.s);
   const inq = hit(ctx.inq, o.s);
   const sc = ms.reduce((acc, k) => acc + (lvOf(k) >= 3 ? 2 : 1), 0) + (rf ? 2 : 0) + (inq ? 1 : 0) + (QUOTE.test(o.s) ? 0.5 : 0);
-  const fu = i > 0 && hit(ctx.follow, o.s) && (sc >= 1 || inq);
+  // 후속 탐구는 평가 어휘가 없는 활동 문장에서만. '관련 자료를 찾아 발표하는 데 익숙함' 같은 총평은 추가 탐구가 아니다
+  const fu = i > 0 && ek === 'none' && hit(ctx.follow, o.s) && (sc >= 1 || inq);
   const skills = skillHits(o.s, ctx.skills);
   return { s: o.s, a: o.a, b: o.b, ms, rf, sc, fu, skills };
 }

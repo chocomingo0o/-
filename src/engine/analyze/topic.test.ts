@@ -61,8 +61,8 @@ describe('topicOf: 따옴표 주제', () => {
     const r = rec('‘학교 앞 교차로 신호 체계 개선’ 프로젝트에 참여하여 통행량을 측정함.');
     expect(topicOf(r, noKw)).toEqual({ text: '학교 앞 교차로 신호 체계 개선', kind: 'q' });
     const b = rec('‘코스모스 (칼 세이건)’ 활동에 참여함.');
-    // ②에서 걸러지고 핵심 문장이 없으니 핵심어로 떨어진다
-    expect(topicOf(b, noKw).kind).toBe('k');
+    // ②에서 걸러지고(따옴표 주제 'q'가 아님), ⑨가 핵심 문장 밖의 문장까지 훑어 '제목 (저자)' 꼴의 책으로 잡는다
+    expect(topicOf(b, noKw)).toEqual({ text: '코스모스', kind: 'b' });
   });
   it("‘…’라는 제목 → 'q'", () => {
     const r = rec('‘우리 동네 하천의 수질 변화’라는 제목으로 보고서를 썼음.');

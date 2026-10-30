@@ -49,7 +49,7 @@
     --note-yellow: #8a6a10;   --note-yellow-ink: #d7a52a;
     --note-mint: #2a6b45;     --note-mint-ink: #3faa6b;
     --link-con: #6f6f6f;
-    --seq-100: #2a2140; --seq-200: #3a2d5e; --seq-300: #4c3a80; --seq-400: #6349a8; --seq-500: #7c5fd0; --seq-600: #9a80ec; --seq-700: #bba6ff;
+    --seq-100: #2a2140; --seq-200: #3a2d5e; --seq-300: #4c3a80; --seq-400: #6349a8; --seq-500: #6f52c4; --seq-600: #9a80ec; --seq-700: #bba6ff;
     --mark-method-ink: #111; --mark-theme-ink: #111; --mark-skill-ink: #111;
     --mark-method: #e5c75a; --mark-theme: #7fd49c; --mark-skill: #c1a7ff;
   }
@@ -62,7 +62,7 @@
   --note-yellow: #8a6a10;   --note-yellow-ink: #d7a52a;
   --note-mint: #2a6b45;     --note-mint-ink: #3faa6b;
   --link-con: #6f6f6f;
-  --seq-100: #2a2140; --seq-200: #3a2d5e; --seq-300: #4c3a80; --seq-400: #6349a8; --seq-500: #7c5fd0; --seq-600: #9a80ec; --seq-700: #bba6ff;
+  --seq-100: #2a2140; --seq-200: #3a2d5e; --seq-300: #4c3a80; --seq-400: #6349a8; --seq-500: #6f52c4; --seq-600: #9a80ec; --seq-700: #bba6ff;
   --mark-method-ink: #111; --mark-theme-ink: #111; --mark-skill-ink: #111;
   --mark-method: #e5c75a; --mark-theme: #7fd49c; --mark-skill: #c1a7ff;
 }

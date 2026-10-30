@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { BookOpen, Contrast, EyeOff, Eye, FilePlus2, Printer, Save, Trash2, NotebookPen } from 'lucide-react';
 import { cn, blindName } from '../lib/utils';
 import type { StudentEntry } from '../engine/types';
@@ -31,8 +31,21 @@ const TABS: { v: View; label: string }[] = [
 ];
 
 export function TopBar(p: Props) {
+  // 상단 바 높이를 --topbar-h로 알려 옆 창(SideDrawer)이 그 아래에 붙어 화면 높이에 맞게 한다.
+  // 폭이 좁으면 버튼 줄이 접혀 높이가 바뀌므로 ResizeObserver로 따라가고, 넓게 보기로 바가 사라지면 0으로 되돌린다.
+  const headRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const el = headRef.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const set = () => root.style.setProperty('--topbar-h', `${Math.round(el.getBoundingClientRect().height)}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => { ro.disconnect(); root.style.setProperty('--topbar-h', '0px'); };
+  }, []);
   return (
-    <header className="noprint sticky top-0 z-40 border-b border-hair bg-surface">
+    <header ref={headRef} className="noprint sticky top-0 z-40 border-b border-hair bg-surface">
       <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
         <div className="flex items-center gap-2 text-[15px] font-bold">
           <span className="inline-block h-3.5 w-3.5 rounded-[4px] bg-ink" /> 탐구분석지도

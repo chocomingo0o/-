@@ -16,7 +16,9 @@ import { cn } from '../../lib/utils';
  *  - sel.t 'sem'  → c가 학기 칸 번호(문자열). '*'면 모든 학기.
  *  - sel.t 'lane' → c가 교과군 키. '*'면 모든 교과군.
  *  - sel.m        → 방법 키. '*'면 방법이 하나라도 있는 기록 전부.
- * 머리글: '어디 · 무엇 · n개 기록', 이전/다음 버튼, 번호 칩(누르면 그 기록으로 스크롤), ↑↓ 키.
+ * 머리글: '어디 · 무엇 · 기록 n건', 이전/다음 버튼, 번호 칩(누르면 그 기록으로 스크롤).
+ * ↑↓ 키는 초점이 옆 창 안에 있을 때만 이전/다음 기록으로 넘긴다(본문에서는 화면 스크롤을 그대로 둔다).
+ * 기록으로 옮길 때는 머리글 높이(번호 칩 줄 수에 따라 바뀜)를 재어 그만큼 띄워 멈춘다.
  * 기록마다 번호, 과목(누르면 계보도로 가서 기록 상세 창), 학기, 교과군, 깊이, 성적, 주제, 방법 칩(고른 방법은 켜짐),
  * 근거 문장 최대 3개(고른 방법의 표현을 노란 형광펜 mark.m로).
  */
@@ -44,6 +46,27 @@ export function MethodList({ an, student, sel }: { an: Analysis; student: Studen
 
   const [cur, setCur] = useState(0);
   const items = useRef<(HTMLLIElement | null)[]>([]);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const headRef = useRef<HTMLDivElement>(null);
+  // 기록으로 옮길 때 띄울 높이 = 붙어 있는 머리글 높이 + 스크롤 상자의 위쪽 안쪽 여백(sticky는 그 여백만큼 내려와 붙는다).
+  const [headH, setHeadH] = useState(120);
+  useEffect(() => {
+    const el = headRef.current;
+    if (!el) return;
+    const padTop = () => {
+      for (let p = el.parentElement; p; p = p.parentElement) {
+        const cs = getComputedStyle(p);
+        if (/(auto|scroll)/.test(cs.overflowY)) return parseFloat(cs.paddingTop) || 0;
+      }
+      return 0;
+    };
+    const measure = () => setHeadH(Math.round(el.getBoundingClientRect().height + padTop()));
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const selKey = `${sel.t}|${sel.m}|${sel.c}`;
   useEffect(() => { setCur(0); }, [selKey]);
 
@@ -58,12 +81,15 @@ export function MethodList({ an, student, sel }: { an: Analysis; student: Studen
     }
   };
 
-  // ↑↓ 키로 이전/다음 기록. 입력란에 초점이 있으면 건드리지 않는다.
+  // ↑↓ 키로 이전/다음 기록. 초점이 옆 창(이 목록을 담은 aside) 안에 있을 때만 쓰고, 입력란에 초점이 있으면 건드리지 않는다.
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       const t = e.target as HTMLElement | null;
-      if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+      const scope = rootRef.current?.closest('aside') ?? rootRef.current;
+      if (!t || !scope || !scope.contains(t)) return;
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable) return;
       e.preventDefault();
       go(cur + (e.key === 'ArrowDown' ? 1 : -1));
     };
@@ -80,16 +106,16 @@ export function MethodList({ an, student, sel }: { an: Analysis; student: Studen
   const blind = state.blind;
 
   return (
-    <div className="-mt-4 pt-4">
+    <div ref={rootRef} className="-mt-4 pt-4">
       {/* 머리글(스크롤해도 위에 붙어 있음) */}
-      <div className="sticky top-0 z-10 -mx-4 -ml-5 border-b border-hair bg-surface px-4 pb-2 pl-5 pt-0">
+      <div ref={headRef} className="sticky top-0 z-10 -mx-4 -ml-5 border-b border-hair bg-surface px-4 pb-2 pl-5 pt-0">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0 text-[13px] text-ink-2">
             <span className="font-semibold text-ink">{where}</span>
             <span className="mx-1 text-muted">·</span>
             <span className="font-semibold text-ink">{what}</span>
             <span className="mx-1 text-muted">·</span>
-            <span className="num">{total}개 기록</span>
+            <span className="num">기록 {total}건</span>
           </div>
           {total > 1 ? (
             <div className="flex items-center gap-1">
@@ -115,7 +141,7 @@ export function MethodList({ an, student, sel }: { an: Analysis; student: Studen
             ))}
           </div>
         ) : null}
-        <p className="mt-1 text-[12px] text-muted">{total > 1 ? '↑↓ 키로 넘길 수 있습니다. ' : ''}과목 이름을 누르면 계보도의 기록 상세 창으로 갑니다.{blind ? ' (이름 가리기 중)' : ''}</p>
+        <p className="mt-1 text-[12px] text-muted">{total > 1 ? <span className="hidden md:inline">옆 창 안에서는 ↑↓ 키로도 넘길 수 있습니다. </span> : null}과목 이름을 누르면 계보도의 기록 상세 창으로 갑니다.{blind ? ' (이름 가리기 중)' : ''}</p>
       </div>
 
       {!total ? (
@@ -127,7 +153,8 @@ export function MethodList({ an, student, sel }: { an: Analysis; student: Studen
               key={r.id}
               ref={(el) => { items.current[i] = el; }}
               tabIndex={-1}
-              className={cn('scroll-mt-[112px] rounded-md border bg-surface p-3 outline-none', i === cur ? 'border-ink' : 'border-hair')}
+              className={cn('rounded-md border bg-surface p-3 outline-none', i === cur ? 'border-ink' : 'border-hair')}
+              style={{ scrollMarginTop: headH + 8 }}
               onFocus={() => setCur(i)}
               aria-label={`${i + 1}번 기록 ${r.subj}`}
             >

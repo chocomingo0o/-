@@ -227,6 +227,8 @@ export function clauseBroken(p: string): boolean {
   const words = (p ?? '').trim().split(/\s+/);
   if (words.length < 2) return false;
   if (LEAD_ADVERBIAL.test(words[0]) && !LEAD_ADVERBIAL_OK.test(words[1] ?? '')) return true;
+  // 첫 어절이 연결 어미로 끝나면('넣어 기포 발생') 앞 절의 꼬리가 붙은 조각이다
+  if (CONNECTIVE_WORD.test(words[0]) && !NOUN_OK.has(words[0])) return true;
   for (let i = 1; i < words.length - 1; i++) {
     const w = words[i];
     if (CONNECTIVE_WORD.test(w) && !NOUN_OK.has(w)) return true;
@@ -234,8 +236,11 @@ export function clauseBroken(p: string): boolean {
   return false;
 }
 
-/** 이런 일반 명사로 끝나면 주제가 아니라 활동 설명이다('…한 내용', '…한 결과'). */
-const BAD_TAIL_NOUN = /(?:내용|결과|과정|자료|방법|활동|틀|부분|점|것|모습|태도|역할|경우|사례들)$/;
+/**
+ * 이런 일반 명사로 끝나면 주제가 아니라 활동 설명이다('…한 내용', '…한 결과').
+ * '자료'는 관형어('찾은 자료', '관련 자료', '다양한 자료')가 붙었을 때만 거른다. '지역별 월평균 기온 자료'처럼 자료 자체가 주제일 수 있다.
+ */
+const BAD_TAIL_NOUN = /(?:내용|결과|과정|방법|활동|틀|부분|점|것|모습|태도|역할|경우|사례들)$|(?:[가-힣]*(?:한|된|은|는|던)|관련|다양한|여러|각종|많은)\s*자료$/;
 
 /**
  * 주제 문구 후보에서 앞쪽의 군더더기를 뗀다.

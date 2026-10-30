@@ -1,6 +1,6 @@
 # 화면 구현 계획
 
-스택: React 19, Tailwind 4(`src/index.css`의 토큰과 유틸리티), lucide-react 아이콘, motion(최소한으로), recharts는 쓰지 않음(표와 SVG로 충분).
+스택: React 19, Tailwind 4(`src/index.css`의 토큰과 유틸리티), lucide-react 아이콘. 애니메이션 라이브러리와 차트 라이브러리는 쓰지 않는다(표와 SVG로 충분).
 양식 규칙은 `docs/DESIGN.md` 5.1(단순한 팔레트)을 따른다.
 
 ## 상태 (`src/state/store.tsx`)
@@ -17,13 +17,17 @@ interface AppState {
   blind: boolean; side: Side; mSel: MethodSel | null;
   userDict: UserDict; errors: { file: string; msg: string }[];
   busy: string | null; toast: string | null; dirty: boolean;
+  wide: boolean;                                    // 넓게 보기(위쪽 메뉴 숨김)
 }
 ```
-- `useApp()` 훅: `{ state, dispatch, actions }`. actions: `addStudents(entries)`, `selectStudent(i)`, `setView(v)`, `openRecord(id)`, `closeSide()`, `openSide(kind)`, `setMethodSel(sel)`, `setTheme(name)`, `setLinkFilter`, `setWhyMode`, `toggleFaint`, `setZoom`, `toggleBlind`, `setMemo(text)`, `setRecMemo(id, text)`, `updateUserDict(dict)`, `setBusy`, `showToast(msg)`, `clearErrors()`, `wipe()`.
+- `useApp()` 훅: `{ state, dispatch }`. 따로 묶은 actions 객체는 없고 `dispatch`로 액션을 보낸다.
+  액션 종류: `addStudents`, `selectStudent`, `setView`, `openRecord`, `closeSide`, `openSide`, `setMethodSel`, `setTheme`, `setLinkFilter`,
+  `setWhyMode`, `toggleFaint`, `setZoom`, `toggleBlind`, `toggleWide`, `setMemo`, `setRecMemo`, `setUserDict`, `setBusy`, `toast`, `setErrors`,
+  `markSaved`, `wipe`.
 - `useAnalysis()` 훅: 현재 학생 + userDict로 `analyze()`를 `useMemo`. 학생별 캐시(Map<id, Analysis>)는 userDict가 바뀌면 비운다.
 
 ## 파일 흐름 (`src/lib/files.ts`)
-- `ingestFiles(files: File[], ctx)`: `.json`이면 작업 파일/사전 판별, `.pdf`면 `extractPages(bytes, getPdfJs(), onProgress)` → 글자 수 200 미만이면 스캔본 오류 → `splitStudents` → 각 그룹 `parseStudent` → 세특·창체가 없으면 오류 → 이름 없으면 파일 이름 → `curriculumOf` → StudentEntry. 3명마다 한 번 `await new Promise(r => setTimeout(r, 0))`.
+- `ingestFiles(files: File[], onBusy?: (text: string) => void)`: `.json`이면 작업 파일/사전 판별, `.pdf`면 `extractPages(bytes, getPdfJs(), onProgress)` → 글자 수 200 미만이면 스캔본 오류 → `splitStudents` → 각 그룹 `parseStudent` → 세특·창체가 없으면 오류 → 이름 없으면 파일 이름 → `curriculumOf` → StudentEntry. 3명마다 한 번 `await new Promise(r => setTimeout(r, 0))`.
 - 오류는 `{file, msg}` 배열로 모아 첫 화면 또는 상단 안내에 표시.
 
 ## 구성 요소
@@ -41,12 +45,13 @@ interface AppState {
 | `components/RecordDrawer.tsx` | 오른쪽 창(너비 조절 손잡이, Esc 닫기): 원문(highlightSegments로 형광펜 + 핵심 문장 점선), 주제·핵심어, 활동 흐름(acts, ↳ 추가 탐구), 기록 메모, 성적·방법·깊이·과학 탐구 기능·관심 분야·관심 주제·계보 수, 이어받은 기록/같은 시기/이어진 기록 카드(종류, 설명 문장, 근거 줄, 상담 힌트, 클릭 이동) |
 | `components/method/MethodView.tsx` | 머리글 + 표 3개 + 결손 지도. 칸 클릭 → mSel → 옆 창에 `MethodList` |
 | `components/method/Heatmap.tsx` | 범용 표: 행/열 머리글, 칸 값(0은 비움), 값 크기 → `--seq-*` 배경, 행·열 머리글 클릭 지원, 선택 칸 테두리, 접근성(role=button, tabIndex) |
-| `components/method/GapPanel.tsx` | 결손 지도: 학기별 카드(기록 수, 쓴 방법, 3단계 비율, 평균 깊이, 아직 안 쓴 3단계 방법), 교과군별 표(기대 방법 중 비어 있는 것은 빈 칸에 점선 테두리 + '아직 없음'), 과학 탐구 기능 8칸 체크, 제안 문장 목록(메모에 넣기 버튼) |
+| `components/method/GapPanel.tsx` | 결손 지도: 학기별 카드(기록 수, 쓴 방법, 수준 3 방법 비율, 평균 깊이, 아직 안 쓴 수준 3 방법), 교과군별 표(기대 방법 가운데 쓴 것은 실선 칩을 먼저, 아직 없는 것은 점선 칩에 '없음' 글자를 붙여 뒤에 둠), 과학 탐구 기능 8칸 체크, 제안 문장 목록(메모에 넣기 버튼). 방법의 '수준'(1~3)과 기록의 탐구 '깊이'(1~4단계)는 다른 척도라 화면 문구에서 이름을 나눠 쓴다 |
 | `components/method/MethodList.tsx` | 선택한 칸의 기록 목록: 번호, 과목, 학기, 깊이, 주제, 방법 칩, 근거 문장(해당 방법 표현 노랑 형광), 이전/다음 이동, 번호 칩 |
 | `components/NotesView.tsx` | 상담 포인트(강점/점검/질문/방향 태그, 기록 보기·계보도에서 보기·메모에 넣기), 상담 메모, 기록별 메모 목록 |
 | `components/DictPanel.tsx` | 찾은 비율, 추가한 표현 목록(삭제), 직접 추가(표현 + 방법 select), 내보내기/가져오기/모두 지우기, 방법을 못 찾은 활동 문장(추천 표현 입력 + 방법 select + 연결) |
 | `components/common/*` | `DepthBars`, `GradeChips`, `MethodChip`, `KindChip`(연결 종류), `Toast`, `Busy`, `Pill`, `SectionTitle` |
-| `components/PrintNotes.tsx` | 인쇄 전용 메모 영역 |
+| `components/SideDrawer.tsx` | 오른쪽 옆 창 틀(제목, 닫기, 너비 조절 손잡이, Esc). 기록 상세 창, 근거 문장 목록, 표현 사전, 상담 노트, 직접 입력이 이 틀 안에 열린다. md 이상에서는 상단 바 아래(`--topbar-h`, TopBar가 ResizeObserver로 잰 높이)에 붙어 화면 높이만큼만 차지하고 안쪽만 스크롤된다. 폰 너비에서는 화면 위에 뜨는 대화 상자 |
+| `App.tsx` 안 `PrintNotes` | 인쇄 전용 메모 영역(따로 파일을 두지 않음) |
 
 ## 동작 세부
 - 계보도 보드 최소 너비 = 128 + 칸 수 × 232px. `zoom`이 null이면 보드가 화면에 맞도록 CSS `zoom` 계산(0.6~1).

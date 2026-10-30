@@ -207,7 +207,8 @@ describe('tokens: 용언 어간과 관형형을 버린다', () => {
   it("'모르는', '지켜', '줄이는', '어떤', '전한', '쓰인'은 낱말이 아니다", () => {
     const out = tokens('모르는 표현이 나오면 뜻을 추측한 뒤 사전으로 확인함. 수칙을 지켜 실점을 줄이는 모습. 어떤 역할을 했는지 전한 두 기사. 쓰인 외래어.');
     for (const bad of ['모르', '지켜', '줄이', '어떤', '전한', '쓰인']) expect(out).not.toContain(bad);
-    expect(out).toEqual(expect.arrayContaining(['추측', '사전', '수칙', '실점', '외래어']));
+    // '추측', '사전'은 수업 일반 낱말이라 불용어(STOP2)다
+    expect(out).toEqual(expect.arrayContaining(['수칙', '실점', '외래어']));
   });
   it('이/리로 끝나는 명사는 그대로 남고(놀이, 먹이, 종이, 거리), 용언 어간(배우는)은 버린다', () => {
     const out = tokens('놀이는 먹이는 종이는 거리는 배우는 원리는 줄이는 지키는.');
@@ -253,5 +254,18 @@ describe('summarize: 공백을 접는다', () => {
     const t0 = Date.now();
     summarize('가' + ' '.repeat(3000) + '가.');
     expect(Date.now() - t0).toBeLessThan(50);
+  });
+});
+
+describe('summarize: 앞머리 접속어는 낱말 경계에서만 뗀다', () => {
+  it("'이어진', '이후의'의 머리를 접속어('이어', '이후')로 잘라 내지 않는다", () => {
+    expect(summarize('이어진 학급 토론 ‘탄소세 도입은 정당한가’에 찬성 측으로 참여함.')).toBe(
+      '이어진 학급 토론 ‘탄소세 도입은 정당한가’에 찬성 측으로 참여함',
+    );
+    expect(summarize('이후의 변화를 정리함.')).toBe('이후의 변화를 정리함');
+  });
+  it("공백이나 쉼표가 뒤따르는 접속어('이어서', '이후,')는 뗀다", () => {
+    expect(summarize('이어서 온도를 바꾸어 측정함.')).toBe('온도를 바꾸어 측정함');
+    expect(summarize('이후, 결과를 표로 정리함.')).toBe('결과를 표로 정리함');
   });
 });

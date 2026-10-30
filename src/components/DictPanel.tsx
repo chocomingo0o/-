@@ -1,8 +1,9 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Link2, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { Analysis, MethodKey, Rec, Sent, StudentEntry, UserDict } from '../engine/types';
 import { semLabel, summarize } from '../engine/analyze';
 import { jo } from '../engine/analyze/text';
+import { escapeRegExp } from '../engine/analyze/methods';
 import { LEVEL_LABEL, METHOD, METHODS } from '../engine/dict/methods';
 import { useApp } from '../state/store';
 import { dropAnalysisCache } from '../hooks/useAnalysis';
@@ -19,12 +20,37 @@ import { cn } from '../lib/utils';
  *  5) 방법을 찾지 못한 활동 문장(최대 60개): 추천 표현을 다듬어 방법에 연결.
  * 사전이 바뀌면 dropAnalysisCache()를 부르고 setUserDict로 새 객체를 넣어 모든 학생을 다시 분석하게 한다.
  * 사전에는 낱말만 저장되고(localStorage) 학생 정보는 저장되지 않는다.
+ * 입력 초안(직접 추가 칸, 못 찾은 문장의 표현·방법)은 옆 창이 기록 상세 등으로 바뀌어 이 화면이 사라져도
+ * 다시 열면 이어 쓸 수 있게 모듈 변수(메모리)에만 둔다. 저장소에는 쓰지 않으므로 새로 고침하면 사라진다.
  */
+
+type Draft = { term: string; m: MethodKey | '' };
+/** 직접 추가 칸의 초안 */
+const addDraft: Draft = { term: '', m: '' };
+/** 못 찾은 문장 줄의 초안. 열쇠는 '학생 id|기록 id|문장 번호'. */
+const rowDrafts = new Map<string, Draft>();
+
+/** 표현 비교용: 띄어쓰기를 무시한다(엔진도 표현 안의 공백을 \s*로 바꿔 찾는다). */
+const squash = (t: string) => t.replace(/\s+/g, '');
+
+/** 교사 추가 표현이 이 학생부의 몇 문장에 걸리는지(엔진 userTerm과 같은 규칙: 특수 문자는 글자 그대로, 공백은 있어도 없어도 됨). */
+function countHits(recs: Rec[], term: string): number {
+  const re = new RegExp(escapeRegExp(term.trim()).replace(/\s+/g, '\\s*'));
+  let n = 0;
+  for (const r of recs) for (const s of r.sents) if (re.test(s.s)) n++;
+  return n;
+}
 export function DictPanel({ an, student }: { an: Analysis; student: StudentEntry }) {
   const { state, dispatch } = useApp();
   const dict = state.userDict;
   const fileInput = useRef<HTMLInputElement>(null);
   const toast = (text: string) => dispatch({ type: 'toast', text });
+
+  // 지금 없는 학생의 줄 초안은 버린다(학생 문장에서 뽑은 표현이 메모리에 남지 않게).
+  useEffect(() => {
+    const ids = new Set(state.students.map((x) => x.id));
+    for (const k of [...rowDrafts.keys()]) if (!ids.has(k.split('|')[0])) rowDrafts.delete(k);
+  }, [state.students]);
 
   const commit = (next: UserDict) => {
     dropAnalysisCache();
@@ -35,13 +61,21 @@ export function DictPanel({ an, student }: { an: Analysis; student: StudentEntry
   const addTerm = (key: MethodKey, raw: string): boolean => {
     const term = raw.replace(/\s+/g, ' ').trim();
     const label = METHOD[key].label;
-    if (term.length < 2) { toast('표현은 2자 이상 적어 주세요.'); return false; }
+    if (squash(term).length < 2) { toast('표현은 띄어쓰기를 빼고 2자 이상 적어 주세요.'); return false; }
     if (term.length > 40) { toast('표현이 너무 깁니다. 40자 안으로 줄여 주세요.'); return false; }
     const cur = dict[key] || [];
-    if (cur.includes(term)) { toast(`‘${term}’${jo(term, '은', '는')} 이미 ${label}에 들어 있습니다.`); return false; }
+    const same = cur.find((t) => squash(t) === squash(term));
+    if (same) { toast(`‘${same}’${jo(same, '은', '는')} 이미 ${label}에 들어 있습니다.`); return false; }
     const next: UserDict = { ...dict, [key]: [...cur, term] };
+    // 오탐 점검: 이 학생부에서 몇 문장에 걸리는지 함께 알린다. 10문장 이상이면서 활동 문장의 10%를 넘게 걸리면 더 긴 표현을 권한다.
+    const hits = countHits(an.recs, term);
+    const wide = hits >= 10 && ratio.n > 0 && hits > ratio.n / 10;
     commit(next);
-    toast(`‘${term}’${jo(term, '을', '를')} ${label}에 연결했습니다. 기록을 다시 분석합니다.`);
+    toast(
+      `‘${term}’${jo(term, '을', '를')} ${label}에 연결했습니다. ` +
+      (hits ? `이 학생부에서 ${hits}문장에 걸립니다.` : '이 학생부에는 아직 이 표현이 든 문장이 없습니다.') +
+      (wide ? ' 너무 넓게 걸리면 지우고 더 긴 표현으로 바꿔 주세요.' : ' 기록을 다시 분석합니다.'),
+    );
     return true;
   };
 
@@ -188,7 +222,7 @@ export function DictPanel({ an, student }: { an: Analysis; student: StudentEntry
         </SectionTitle>
         {shown.length ? (
           <ul className="space-y-2.5">
-            {shown.map(({ r, si, s }) => <UnmatchedRow key={`${r.id}:${si}`} r={r} s={s} onLink={addTerm} />)}
+            {shown.map(({ r, si, s }) => <UnmatchedRow key={`${r.id}:${si}`} draftKey={`${student.id}|${r.id}|${si}`} r={r} s={s} onLink={addTerm} />)}
           </ul>
         ) : (
           <Empty>{ratio.n ? '모든 활동 문장에서 방법을 찾았습니다.' : '활동 문장이 없어 보여 줄 것이 없습니다.'}</Empty>
@@ -202,9 +236,11 @@ export function DictPanel({ an, student }: { an: Analysis; student: StudentEntry
 /* ───────────────────────── 부분 ───────────────────────── */
 
 function AddForm({ onAdd }: { onAdd: (key: MethodKey, term: string) => boolean }) {
-  const [term, setTerm] = useState('');
-  const [m, setM] = useState<MethodKey | ''>('');
-  const ok = term.trim().length >= 2 && !!m;
+  const [term, setTermState] = useState(addDraft.term);
+  const [m, setMState] = useState<MethodKey | ''>(addDraft.m);
+  const setTerm = (t: string) => { addDraft.term = t; setTermState(t); };
+  const setM = (k: MethodKey | '') => { addDraft.m = k; setMState(k); };
+  const ok = squash(term).length >= 2 && !!m;
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!ok || !m) return;
@@ -225,10 +261,13 @@ function AddForm({ onAdd }: { onAdd: (key: MethodKey, term: string) => boolean }
   );
 }
 
-function UnmatchedRow({ r, s, onLink }: { r: Rec; s: Sent; onLink: (key: MethodKey, term: string) => boolean }) {
-  const [term, setTerm] = useState(() => suggestTerm(s.s));
-  const [m, setM] = useState<MethodKey | ''>('');
-  const ok = term.trim().length >= 2 && !!m;
+function UnmatchedRow({ r, s, draftKey, onLink }: { r: Rec; s: Sent; draftKey: string; onLink: (key: MethodKey, term: string) => boolean }) {
+  const [term, setTermState] = useState(() => rowDrafts.get(draftKey)?.term ?? suggestTerm(s.s));
+  const [m, setMState] = useState<MethodKey | ''>(() => rowDrafts.get(draftKey)?.m ?? '');
+  const keep = (d: Draft) => { rowDrafts.set(draftKey, d); };
+  const setTerm = (t: string) => { keep({ term: t, m }); setTermState(t); };
+  const setM = (k: MethodKey | '') => { keep({ term, m: k }); setMState(k); };
+  const ok = squash(term).length >= 2 && !!m;
   return (
     <li className="rounded-md border border-hair bg-surface p-3">
       <div className="flex flex-wrap items-baseline gap-x-2 text-[12.5px] text-muted">
@@ -242,10 +281,10 @@ function UnmatchedRow({ r, s, onLink }: { r: Rec; s: Sent; onLink: (key: MethodK
           onChange={(e) => setTerm(e.target.value)}
           placeholder="문장에서 쓸 표현"
           aria-label={`${r.subj} 문장에서 쓸 표현`}
-          className={cn('min-w-[140px] flex-1 rounded-md border bg-surface px-2.5 py-1.5 text-[14px] placeholder:text-muted', term.trim().length >= 2 ? 'border-hair-2' : 'border-dashed border-hair-2')}
+          className={cn('min-w-[140px] flex-1 rounded-md border bg-surface px-2.5 py-1.5 text-[14px] placeholder:text-muted', squash(term).length >= 2 ? 'border-hair-2' : 'border-dashed border-hair-2')}
         />
         <MethodSelect value={m} onChange={setM} />
-        <button type="button" className="btn sm" disabled={!ok} onClick={() => { if (m) onLink(m, term); }} aria-label="이 표현을 고른 방법에 연결">
+        <button type="button" className="btn sm" disabled={!ok} onClick={() => { if (m && onLink(m, term)) rowDrafts.delete(draftKey); }} aria-label="이 표현을 고른 방법에 연결">
           <Link2 className="h-3.5 w-3.5" aria-hidden /> 연결
         </button>
       </div>
@@ -263,7 +302,7 @@ function MethodSelect({ value, onChange }: { value: MethodKey | ''; onChange: (k
     >
       <option value="">방법 고르기</option>
       {([3, 2, 1] as const).map((lv) => (
-        <optgroup key={lv} label={`${lv}단계 · ${LEVEL_LABEL[lv]}`}>
+        <optgroup key={lv} label={`수준 ${lv}: ${LEVEL_LABEL[lv]}`}>
           {METHODS.filter((d) => d.lv === lv).map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
         </optgroup>
       ))}

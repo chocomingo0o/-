@@ -417,7 +417,7 @@ describe('buildGaps: 학기 구분 없는 기록의 흐름 문장', () => {
     const g = buildGaps(recs, [], emptyStudent());
     const s = g.suggestions.find((x) => x.slot !== undefined);
     expect(s).toBeDefined();
-    expect(s!.text).toMatch(/^2학년 \(학년 전체\) 기록 2건에 3단계 방법/);
+    expect(s!.text).toMatch(/^2학년 \(학년 전체\) 기록 2건에 수준 3 방법/);
     expect(g.suggestions.filter((x) => x.slot !== undefined)).toHaveLength(1);
   });
 });

@@ -139,7 +139,14 @@ describe('analyze(sampleStudent())', () => {
       expect(a).toBeTruthy();
       expect(b).toBeTruthy();
       if (l.rel === '동시') expect(a.t).toBe(b.t);
-      else expect(a.t).toBeLessThan(b.t);
+      else if (a.t === b.t) {
+        // 같은 학기라도 직접 언급이 있으면 언급된 기록을 앞에 둔 연결이다(통합과학1 → 과학탐구실험1)
+        expect(l.cite).toBe(true);
+      } else if (a.t > b.t) {
+        // 1학기 세특이 같은 학년 창체 활동을 언급하면 창체 → 세특으로 뒤집는다(미생물탐구반 → 화학)
+        expect(a.kind).toBe('창체');
+        expect(l.lines.some((x) => x.endsWith('순서로 놓음'))).toBe(true);
+      }
       expect(l.cross).toBe(a.lane !== b.lane);
       expect(Object.keys(LINK_KINDS)).toContain(l.rel);
       expect(l.words.length).toBeGreaterThan(0);
@@ -289,10 +296,12 @@ describe('재export', () => {
   });
 
   it('lineage는 효소 줄기의 뿌리부터 끝까지 이어진다', () => {
-    const club2 = rec('동아리활동(미생물탐구반)');
-    const { up } = lineage(an.links, club2.id);
-    expect(up.has(rec('통합과학2').id)).toBe(true);
-    expect(up.size).toBeGreaterThanOrEqual(3);
+    // 효소 줄기: 통합과학1 → 과학탐구실험1 → 동아리(생명과학탐구반) → 생명과학 → 대수
+    const { up } = lineage(an.links, rec('대수').id);
+    for (const s of ['통합과학1', '과학탐구실험1', '동아리활동(생명과학탐구반)', '생명과학']) expect(up.has(rec(s).id)).toBe(true);
+    expect(lineage(an.links, rec('통합과학1').id).down.has(rec('대수').id)).toBe(true);
+    // 미생물 줄기의 동아리는 통합과학2를 직접 언급해 이어받는다
+    expect(lineage(an.links, rec('동아리활동(미생물탐구반)').id).up.has(rec('통합과학2').id)).toBe(true);
   });
 });
 
@@ -309,5 +318,188 @@ describe('highlightSegments: 사용자 사전 캐시는 내용 기준이다', ()
     const r2 = a2.recs.find((x) => x.subj === '공통국어1')!;
     expect(r2.sents.some((s) => s.ms.includes('experiment'))).toBe(true);
     expect(highlightSegments(r2, a2, ud).some((s) => s.label.includes('추가한 표현'))).toBe(true);
+  });
+});
+
+/* ───────────────────────── 검수 뒤 보강: 예시 학생의 줄기와 상담 포인트(phase 3/4) ───────────────────────── */
+describe('예시 학생: 줄기가 원문과 맞게 이어진다', () => {
+  const t1 = rec('통합과학1');
+  const lab1 = rec('과학탐구실험1');
+  const info = rec('정보');
+  const club1 = rec('동아리활동(생명과학탐구반)');
+  const bio = rec('생명과학', 2);
+  const alg = rec('대수');
+  const chem = rec('화학');
+  const t2 = rec('통합과학2');
+  const kor2 = rec('공통국어2');
+  const eng1 = rec('영어Ⅰ');
+  const club2 = rec('동아리활동(미생물탐구반)');
+  const math2 = rec('공통수학2');
+  const soc1 = rec('통합사회1');
+  const soc2 = rec('통합사회2');
+  const geo = rec('세계시민과 지리');
+
+  it('효소 줄기: 통합과학1 → 과학탐구실험1 → 동아리(생명과학탐구반) → 생명과학 → 대수', () => {
+    // 같은 1학년 1학기지만 과학탐구실험1이 '통합과학1 시간에 다루었던'이라고 언급하므로 앞뒤가 정해진 심화(3 → 4)다
+    const a = linkBetween(t1, lab1)!;
+    expect(a.rel).toBe('심화');
+    expect(a.cite).toBe(true);
+    expect(linkBetween(lab1, t1)).toBeUndefined();
+    expect(linkBetween(lab1, club1)?.cite).toBe(true);
+    expect(linkBetween(club1, bio)).toBeDefined();
+    // 대수는 '생명과학 시간에 본'이라고 언급하고, 생명과학은 '대수 수행평가 주제로 이어 갔으며'라고 적는다: 생명과학 → 대수
+    const b = linkBetween(bio, alg)!;
+    expect(b.cite).toBe(true);
+    expect(b.rel).toBe('심화');
+    // 대수의 '1학년 동아리에서 진행한 … 카탈레이스 반응 실험'은 1학년 동아리를 직접 언급한 것이다
+    expect(linkBetween(club1, alg)?.cite).toBe(true);
+    // 정보의 '과학탐구실험1 시간에 측정한 … 자료'도 직접 언급이다(정보 카드의 카탈레이스 점과 선이 맞는다)
+    expect(linkBetween(lab1, info)?.cite).toBe(true);
+    expect(info.themes).toContain('카탈레이스');
+  });
+
+  it('수학 줄기: 공통수학2 → 대수(학년 접두어 없는 직접 언급, 같은 과목 계열)', () => {
+    const l = linkBetween(math2, alg)!;
+    expect(l).toBeDefined();
+    expect(l.cite).toBe(true);
+    expect(l.ss).toBe(true);
+    expect(l.why.startsWith('같은 계열 / ')).toBe(true);
+    expect(an.insights.some((i) => i.go === math2.id && i.t.includes('뒤이은 탐구가 없습니다'))).toBe(false);
+  });
+
+  it("통합과학2의 '감염병 확산 모형을 보고 … 해석함'은 수학적 모델링이 아니고, 통합과학2는 2단계다", () => {
+    const s = t2.sents.find((x) => x.s.includes('감염병 확산 모형을 보고'))!;
+    expect(s).toBeDefined();
+    expect(s.ms).not.toContain('modeling');
+    expect(s.skills).toContain('interpret');
+    expect(t2.methods).not.toContain('modeling');
+    expect(t2.depth).toBe(2);
+    for (const l of an.links.filter((x) => (x.from === t2.id || x.to === t2.id) && x.rel !== '동시')) {
+      expect(l.sent).not.toContain('수학적 모델링');
+      expect(l.why).not.toContain('깊이↓');
+    }
+  });
+
+  it('항생제 줄기: 통합과학2에서 공통국어2·영어Ⅰ·미생물탐구반으로, 미생물탐구반에서 화학으로 이어진다', () => {
+    // 공통국어2(같은 학기)가 '통합과학2 시간에 조사했던'이라고 언급한다
+    expect(linkBetween(t2, kor2)?.cite).toBe(true);
+    expect(linkBetween(t2, eng1)?.rel).toBe('확장');
+    expect(linkBetween(t2, club2)?.rel).toBe('심화');
+    // 화학(2학년 1학기)이 '동아리에서 진행한 손 세정제의 세균 억제 효과 비교 실험에서 본'이라고 적으므로 동아리가 먼저다
+    const f = linkBetween(club2, chem)!;
+    expect(f).toBeDefined();
+    expect(linkBetween(chem, club2)).toBeUndefined();
+    expect(f.lines.some((x) => x.endsWith('순서로 놓음'))).toBe(true);
+    // 대수의 '거품 높이'(측정 변수)와 '세균 수를 등비수열로'(수열 예시)는 미생물 줄기와 무관하다
+    expect(linkBetween(alg, club2)).toBeUndefined();
+    expect(alg.themes).not.toContain('항생제');
+  });
+
+  it('기후변화 반복 줄기: 통합사회1 → 통합사회2 → 세계시민과 지리가 모두 반복이고 대표 낱말은 기후변화다', () => {
+    const ab = linkBetween(soc1, soc2)!;
+    const bc = linkBetween(soc2, geo)!;
+    expect(ab.rel).toBe('반복');
+    expect(bc.rel).toBe('반복');
+    expect(ab.words[0]).toBe('기후변화');
+    expect(ab.theme).toBe('기후변화');
+    expect(ab.why).toBe('같은 과목 / 기후변화 / 깊이 2→2');
+    const rep = an.insights.find((i) => i.t.includes('‘반복’ 연결이'))!;
+    expect(rep).toBeDefined();
+    expect(rep.t).toContain('통합사회1 → 통합사회2(기후변화)');
+  });
+
+  it('관심 주제는 6개 이하이고 같은 관심(세균·감염병)은 항생제로 합쳐지며 측정 변수(거품)는 주제가 아니다', () => {
+    const names = an.themes.map((t) => t.name);
+    expect(names.length).toBeLessThanOrEqual(6);
+    for (const bad of ['거품', '세균', '감염병', '미생물학']) expect(names).not.toContain(bad);
+    expect(an.themes.find((t) => t.name === '항생제')!.words).toEqual(expect.arrayContaining(['세균', '감염병']));
+    expect(names).toContain('기후변화');
+  });
+});
+
+describe('예시 학생: 방법·깊이·주제 오탐 바로잡기', () => {
+  it("'탐구를 설계함', '실험을 설계함', '만들기 부스에 참가'는 설계·제작이 아니다", () => {
+    for (const subj of ['과학탐구실험1', '과학탐구실험2', '동아리활동(미생물탐구반)']) expect(rec(subj).methods).not.toContain('making');
+    expect(rec('자율·자치활동', 1).methods).not.toContain('making');
+  });
+  it("체육 체력 기록 측정과 다른 수업에서 측정한 자료의 입력은 실험·측정이 아니고, '보완 운동'은 성찰이 아니다", () => {
+    const pe = rec('체육1');
+    expect(pe.methods).not.toContain('experiment');
+    expect(pe.depth).toBeLessThan(4);
+    expect(pe.sents.some((x) => x.rf)).toBe(false);
+    expect(rec('정보').methods).not.toContain('experiment');
+  });
+  it('평가 문장의 성찰 단서와 후속 단서는 세지 않는다', () => {
+    const info = rec('정보');
+    expect(info.sents.find((x) => x.s.includes('디버깅 습관이 돋보임'))!.rf).toBe(false);
+    expect(info.depth).toBe(3);
+    const soc2 = rec('통합사회2');
+    expect(soc2.sents.find((x) => x.s.includes('발표하는 데 익숙함'))!.fu).toBe(false);
+    expect(soc2.summary).not.toContain('익숙함');
+    // 통합사회1의 요약은 '문화 상대주의의 한계를 다룬 사례'(개념 설명)가 아니라 기후변화 토론·자료 조사에서 고른다
+    expect(rec('통합사회1').summary).not.toContain('문화 상대주의');
+  });
+  it('카드 주제가 원문 핵심을 가리킨다', () => {
+    expect(rec('통합사회1').topic).toBe('기후변화 대응은 개인의 실천으로 충분한가');
+    expect(rec('통합과학1').topic).toBe('간 조각의 과산화수소 분해 관찰');
+    expect(rec('생명과학', 2).topic).toBe('효소 반응 속도에 영향을 주는 요인');
+    expect(rec('정보').topic).toBe('공공데이터 포털의 지역별 월평균 기온 자료');
+    expect(rec('음악').topic).not.toContain('여덟');
+    // 뒤쪽 어절만 잘라 낸 조각('올리기 기록')을 주제로 쓰지 않는다
+    expect(rec('체육1').topic).not.toBe('올리기 기록');
+  });
+  it('과학 탐구 기능: 결과 문장의 대조군, 온라인 탐방, 국어의 구조도·반론은 잡지 않고, 처음 예상·측정 규칙·관찰 확인은 잡는다', () => {
+    const skillsOf = (subj: string, part: string, year?: number): string[] =>
+      rec(subj, year).sents.find((x) => x.s.includes(part))!.skills;
+    expect(skillsOf('동아리활동(미생물탐구반)', '대조군에는 억제대가')).not.toContain('design');
+    expect(skillsOf('동아리활동(미생물탐구반)', '대조군으로 둠')).toContain('design');
+    expect(skillsOf('진로활동', '온라인 탐방', 1)).not.toContain('collect');
+    expect(skillsOf('공통국어1', '구조도로 정리')).not.toContain('model');
+    expect(skillsOf('공통국어2', '반론을 스스로')).not.toContain('problem');
+    expect(skillsOf('과학탐구실험2', '처음 예상과 달리')).toContain('problem');
+    expect(skillsOf('과학탐구실험2', '측정 규칙으로')).toContain('design');
+    expect(skillsOf('통합과학1', '산소임을 확인')).toContain('collect');
+  });
+});
+
+describe('예시 학생: 상담 포인트 문장이 사실과 맞는다', () => {
+  const ins = an.insights;
+  const t = (part: string) => ins.find((i) => i.t.includes(part));
+
+  it('14개 이하이고 화면 용어(계보)를 쓰며, 이미 깊은 주제에 깊이 정체를 붙이지 않는다', () => {
+    expect(ins.length).toBeLessThanOrEqual(14);
+    expect(ins.some((i) => i.t.includes('줄기'))).toBe(false);
+    expect(ins.some((i) => i.t.includes('깊어지지 않습니다'))).toBe(false);
+  });
+  it('가장 긴 계보는 효소 줄기 5건이고 대수에서 끝나며, 질문은 그 계보의 마지막 한 걸음을 묻는다', () => {
+    const chain = t('가장 긴 탐구 계보')!;
+    expect(chain.t).toBe('가장 긴 탐구 계보는 기록 5건이 한 줄로 이어진 것으로, 2학년 1학기 대수에서 끝납니다.');
+    expect(chain.go).toBe(rec('대수').id);
+    const q = ins.find((i) => i.tg === 'q' && i.t.includes('어떻게 이어졌는지'))!;
+    expect(q.go).toBe(rec('생명과학', 2).id);
+    expect(q.t).toContain('2학년 생명과학에서 한');
+    expect(q.t).toContain('2학년 대수 탐구로');
+  });
+  it('관통 주제는 한 문장으로 합쳐지고, 진로 희망 문장 둘이 강점에 남는다', () => {
+    const span = ins.filter((i) => i.tg === 's' && i.t.includes('교과군에서 이어집니다'));
+    expect(span).toHaveLength(1);
+    expect(span[0].t).toContain('‘카탈레이스’(');
+    expect(span[0].t).toContain('‘항생제’(');
+    expect(t('진로 희망 분야(생명과학·바이오)')?.tg).toBe('s');
+    expect(t('생명과학 연구원 → 미생물학 연구원으로 한 방향을 유지합니다')?.tg).toBe('s');
+  });
+  it('심화 예시는 직접 언급이 있는 연결부터 고른다', () => {
+    const deep = t('‘심화’ 연결이')!;
+    expect(deep.tg).toBe('s');
+    expect(deep.t).toContain('예: 통합과학1 → 과학탐구실험1');
+    const n = an.links.filter((l) => l.rel === '심화').length;
+    expect(deep.t).toContain(`‘심화’ 연결이 ${n}개`);
+  });
+  it('뒤이은 탐구가 있는 기록(공통수학2, 1학년 동아리)을 후속 없는 깊은 탐구로 꼽지 않는다', () => {
+    const tips = ins.filter((i) => i.t.includes('뒤이은 탐구가 없습니다'));
+    for (const tip of tips) {
+      expect(an.links.some((l) => l.from === tip.go && l.rel !== '동시')).toBe(false);
+      expect([rec('공통수학2').id, rec('동아리활동(생명과학탐구반)').id]).not.toContain(tip.go);
+    }
   });
 });

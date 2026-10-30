@@ -42,6 +42,16 @@ function Shell() {
 
   useEffect(() => { restoreTheme(); setDark(isDark()); }, []);
 
+  // 화면(계보도·탐구 방법·상담 노트)이나 학생을 바꾸면 페이지 맨 위에서 시작한다.
+  // 그대로 두면 폰 너비에서 앞 화면의 스크롤 위치(예: 탐구 방법 표 아래쪽)에서 새 화면이 열려 머리 부분이 보이지 않는다.
+  const viewKey = `${state.view}|${state.cur}`;
+  const lastViewKey = useRef(viewKey);
+  useEffect(() => {
+    if (lastViewKey.current === viewKey) return;
+    lastViewKey.current = viewKey;
+    window.scrollTo({ top: 0 });
+  }, [viewKey]);
+
   // 알림은 2.6초 뒤 사라짐
   useEffect(() => {
     if (!state.toast) return;
@@ -171,7 +181,7 @@ function Shell() {
         />
         {state.side === 'manual' ? (
           <div className="fixed inset-0 z-50 flex justify-end bg-scrim" onClick={closeManual}>
-            {/* flex로 감싸 옆 창이 화면 아래까지 늘어나게 한다(md 이상에서 aside는 static) */}
+            {/* 첫 화면에는 상단 바가 없어 --topbar-h가 0이므로 md 이상에서도 옆 창이 화면 높이를 가득 채운다 */}
             <div onClick={(e) => e.stopPropagation()} className="flex h-full max-w-full">
               <SideDrawer open kicker="붙여 넣기" title="직접 입력" onClose={closeManual} defaultWidth={620}>
                 {manualInput}

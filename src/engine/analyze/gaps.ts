@@ -16,6 +16,7 @@
  *                    평균 깊이, 아직 안 쓴 3단계 방법.
  *   lanes            기록이 있는 교과군만. 기대 방법은 dict/subjects.ts의 LANE[lane].expected. missing = expected 중 한 번도 안 쓴 것.
  *   trend            학기 흐름 문장(학기별 3단계 비율과 평균 깊이, 앞뒤 학기 변화).
+ *                    화면 문장에서는 탐구 깊이(1~4단계)와 헷갈리지 않게 방법 수준을 '수준 3 방법'으로 부른다.
  *                    학기 구분 없는 기록(창체)만 있는 칸은 '○학년 (학년 전체)'로 부르고, 같은 기록이 앞 칸에도 들어 있으면
  *                    (예: 2학년 1학기 세특 + 2학년 창체 → 2-2 칸) 자기 자신과 비교하는 변화 문장을 만들지 않는다.
  *   suggestions      제안 문장. 'd' 방향, 'g' 점검.
@@ -356,7 +357,7 @@ export function buildGaps(recs: Rec[], links: Link[], S: StudentRecord): GapRepo
     const k0 = Math.round(first.lv3Share * n0);
     const in0 = inbound(first);
     trend.push(
-      `${label(first)}: 기록 ${n0}건, 3단계 방법이 든 기록 ${k0}건(${pct(first.lv3Share)}%), 평균 깊이 ${f1(first.avgDepth)}` +
+      `${label(first)}: 기록 ${n0}건, 수준 3 방법이 든 기록 ${k0}건(${pct(first.lv3Share)}%), 평균 깊이 ${f1(first.avgDepth)}` +
         (in0 ? `, 앞 탐구를 이어받은 기록 ${in0}건` : ''),
     );
     // 변화 문장을 만든 마지막 칸(학년 전체 칸으로 되풀이된 칸은 건너뛴다)
@@ -385,7 +386,7 @@ export function buildGaps(recs: Rec[], links: Link[], S: StudentRecord): GapRepo
       const inb = inbound(b);
       const nb = b.recIds.length;
       trend.push(
-        `${label(a)} → ${label(b)}: 3단계 방법이 든 기록 비율 ${pct(a.lv3Share)}% → ${pct(b.lv3Share)}%(${shareDir}), ` +
+        `${label(a)} → ${label(b)}: 수준 3 방법이 든 기록 비율 ${pct(a.lv3Share)}% → ${pct(b.lv3Share)}%(${shareDir}), ` +
           `평균 깊이 ${f1(a.avgDepth)} → ${f1(b.avgDepth)}(${depthDir})` +
           (inb ? `, 앞 탐구를 이어받은 기록 ${inb}건` : '') +
           (nb < 2 ? '. 기록이 1건이라 참고만 하세요' : ''),
@@ -471,7 +472,7 @@ export function buildGaps(recs: Rec[], links: Link[], S: StudentRecord): GapRepo
       tg: 'g',
       slot: st.slot,
       text:
-        `${where} 기록 ${st.recIds.length}건에 3단계 방법(직접 자료를 만들거나 분석하는 방법)이 하나도 없습니다. ` +
+        `${where} 기록 ${st.recIds.length}건에 수준 3 방법(직접 자료를 만들거나 분석하는 방법)이 하나도 없습니다. ` +
         '이 학기 탐구가 조사와 정리에 머물렀는지 살펴보고, 다음 학기에는 측정이나 설문처럼 직접 자료를 만드는 활동을 하나 넣어 보도록 안내해 보세요.',
     });
   }

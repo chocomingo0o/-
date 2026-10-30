@@ -36,9 +36,17 @@ describe('단서 목록 크기와 형식', () => {
 
 describe('필수 단서 포함', () => {
   it('REFLECT_TERMS 핵심 단서', () => {
-    for (const w of ['한계', '오차', '개선', '보완', '수정하', '재실험', '일반화', '재검증', '시행착오', '오개념']) {
+    for (const w of ['한계점', '오차', '개선', '수정하', '재실험', '일반화', '재검증', '시행착오', '오개념']) {
       expect(REFLECT_TERMS).toContain(w);
     }
+    // 맨몸 '한계', '오류', '보완'은 개념 설명·평가 문장에도 걸리므로 학생이 짚고 고친 꼴만 본다
+    expect(REFLECT_RX.test('사용 조건을 고정하지 않은 점을 한계로 정리함')).toBe(true);
+    expect(REFLECT_RX.test('설명하기 어렵다는 한계를 스스로 지적함')).toBe(true);
+    expect(REFLECT_RX.test('문화 상대주의의 한계를 다룬 사례를 읽고 토의함')).toBe(false);
+    expect(REFLECT_RX.test('코드의 오류를 찾아 수정함')).toBe(true);
+    expect(REFLECT_RX.test('오류가 나면 메시지를 읽고 원인을 스스로 찾는 디버깅 습관이 돋보임')).toBe(false);
+    expect(REFLECT_RX.test('운영 결과를 점검해 보완 의견을 냄')).toBe(true);
+    expect(REFLECT_RX.test('약한 체력 요소를 찾고 보완 운동을 계획함')).toBe(false);
     expect(REFLECT_RX.test('다시 측정하여 오차를 줄였다')).toBe(true);
     expect(REFLECT_RX.test('가설을 수정하고 재실험함')).toBe(true);
     expect(REFLECT_RX.test('예상과 다른 결과가 나와 원인을 분석함')).toBe(true);

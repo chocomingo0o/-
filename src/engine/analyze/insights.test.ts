@@ -151,9 +151,11 @@ describe('buildInsights: 예시 학생 + 손으로 그린 연결', () => {
 
   it('가장 긴 계보는 기록 4건이 한 줄로 이어져 생명과학에서 끝나고, 그 줄기를 묻는 질문이 있다', () => {
     const ins = insNoGaps;
-    const chain = ins.find((i) => i.t.includes('가장 긴 탐구 줄기'));
+    // 화면의 용어('계보')와 맞춘다. '줄기'는 화면 어디에도 정의되지 않은 말이다
+    const chain = ins.find((i) => i.t.includes('가장 긴 탐구 계보'));
     expect(chain).toBeDefined();
     expect(chain!.tg).toBe('s');
+    expect(ins.some((i) => i.t.includes('줄기'))).toBe(false);
     expect(chain!.t).toContain('기록 4건이 한 줄로');
     expect(chain!.t).not.toContain('단계');
     expect(chain!.t).toContain('2학년 1학기 생명과학');
@@ -179,11 +181,16 @@ describe('buildInsights: 예시 학생 + 손으로 그린 연결', () => {
 
   it('관통 주제와 진로 희망 문장이 강점으로 들어간다', () => {
     const ins = insNoGaps;
-    expect(ins.some((i) => i.tg === 's' && i.th && i.t.includes('개 교과군에서 이어집니다'))).toBe(true);
+    // 관통 주제가 둘 이상이면 한 문장으로 합쳐지므로 강점 칸에 관통 주제 문장은 하나뿐이다
+    const span = ins.filter((i) => i.tg === 's' && i.th && i.t.includes('교과군에서 이어집니다'));
+    expect(span).toHaveLength(1);
+    expect(span[0].t).toMatch(/^관심 주제 \d개가 [\d·]+학년에 걸쳐 두 개 이상의 교과군에서 이어집니다: ‘/);
+    expect(span[0].t).toContain('‘카탈레이스’(');
     const hope = ins.find((i) => i.t.includes('진로 희망 분야(생명과학·바이오)'));
     expect(hope).toBeDefined();
     expect(hope!.t).toMatch(/\d+건 중 \d+건\(\d+%\)/);
-    // 관통 주제가 셋이면 14개 상한에서 마지막 강점(진로 유지)이 밀릴 수 있으므로 주제 없이 만든 결과에서 확인한다
+    // 관통 주제를 한 문장으로 합쳤으므로 14개 상한에서도 진로 유지 문장이 밀리지 않는다
+    expect(ins.some((i) => i.t.includes('한 방향을 유지합니다'))).toBe(true);
     const keep = buildInsights(recs, links, [], emptyGaps(), S).find((i) => i.t.includes('한 방향을 유지합니다'));
     expect(keep).toBeDefined();
     expect(keep!.tg).toBe('s');
@@ -252,13 +259,13 @@ describe('buildInsights: 손으로 만든 경우', () => {
     expect(h!.t).toContain('늘려 볼 여지');
   });
 
-  it('아직 쓰지 않은 3단계 방법을 방향으로 알려 준다', () => {
+  it('아직 쓰지 않은 수준 3 방법을 방향으로 알려 준다', () => {
     const recs = [
       rec('A', { methods: ['experiment', 'data', 'writing'], depth: 3, topic: '효소' }),
       rec('B', { lane: '수학', methods: ['proof'], depth: 2, topic: '증명' }),
     ];
     const ins = buildInsights(recs, [], [], emptyGaps(), emptyStudent());
-    const d = ins.find((i) => i.t.startsWith('아직 쓰지 않은 3단계 방법'));
+    const d = ins.find((i) => i.t.startsWith('아직 쓰지 않은 수준 3 방법'));
     expect(d).toBeDefined();
     expect(d!.tg).toBe('d');
     expect(d!.t).toContain('설문·면담');
@@ -313,6 +320,27 @@ describe('buildInsights: 손으로 만든 경우', () => {
     expect(g!.t).toContain('3.0 → 2.0');
     // 두 교과군 이상에 걸치므로 관통 주제 강점도 함께 나온다
     expect(ins.some((i) => i.tg === 's' && i.th === '효소')).toBe(true);
+  });
+
+  it('깊이 정체: 앞이나 뒤 절반 평균이 3.5 이상이면 이미 깊은 주제이므로 만들지 않는다', () => {
+    const mk = (depths: (1 | 2 | 3 | 4)[], words: string[] = ['효소', '기질']) => {
+      const lanes: LaneKey[] = ['과학', '동아리', '수학', '사회', '국어'];
+      const recs = depths.map((d, i) =>
+        rec(`R${i}`, { lane: lanes[i % lanes.length], year: (i < 2 ? 1 : 2) as Year, sem: i % 2 === 0 ? 1 : 2, depth: d, topic: `t${i}` }),
+      );
+      const themes: Theme[] = [{ name: words[0], words, ids: recs.map((r) => r.id), color: '#000' }];
+      return buildInsights(recs, [], themes, emptyGaps(), emptyStudent()).filter((i) => i.t.includes('깊어지지 않습니다'));
+    };
+    // 뒤 절반 평균 3.5(4, 3): 이미 깊다
+    expect(mk([4, 4, 4, 3])).toHaveLength(0);
+    // 앞 절반 평균 3.5(4, 3) → 뒤 3.0: 앞이 이미 성찰·확장 수준이라 '깊어지지 않는다'고 하지 않는다
+    expect(mk([4, 3, 3, 3])).toHaveLength(0);
+    // 3.0 → 2.5: 점검
+    expect(mk([3, 3, 3, 2])).toHaveLength(1);
+    // 기록이 세 건이면 만들지 않는다
+    expect(mk([3, 3, 2])).toHaveLength(0);
+    // 주제 낱말이 하나뿐이고 관심 분야 낱말도 아니면 만들지 않는다
+    expect(mk([3, 3, 3, 2], ['거품'])).toHaveLength(0);
   });
 
   it('14개를 넘으면 자르되 질문 두 개는 남긴다', () => {
@@ -375,7 +403,7 @@ describe('buildInsights: 최근 학기 판정과 계보 문장', () => {
     // A→B→D 와 C→D: 조상은 3개지만 가장 긴 한 줄은 A→B→D(기록 3건)
     const links = [link('A', 'B'), link('B', 'D'), link('C', 'D')];
     const ins = buildInsights(recs, links, [], emptyGaps(), emptyStudent());
-    const chain = ins.find((i) => i.t.includes('가장 긴 탐구 줄기'))!;
+    const chain = ins.find((i) => i.t.includes('가장 긴 탐구 계보'))!;
     expect(chain).toBeDefined();
     expect(chain.t).toContain('기록 3건이 한 줄로');
     expect(chain.t).toContain('2학년 동아리활동(미생물탐구반)에서 끝납니다');

@@ -266,3 +266,27 @@ describe('compileMethods: 한 글자 표현은 무시한다', () => {
     expect(compileMethods({ coding: ['측'] }).find((c) => c.def.key === 'coding')!.user).toBeNull();
   });
 });
+
+describe('methodHits: 검수 뒤 보강(남의 모형 해석, 설계라는 말, 체육 기록 측정)', () => {
+  const hits = (s: string): MethodKey[] => methodHits(s, M);
+  it('남이 만든 모형을 보고 해석한 것은 수학적 모델링이 아니고, 모형을 세운 것은 모델링이다', () => {
+    expect(hits('감염병 확산 모형을 보고 백신 접종률이 집단 면역에 미치는 영향을 해석함.')).not.toContain('modeling');
+    expect(hits('인구 성장 모형을 보고 그래프의 의미를 이해함.')).not.toContain('modeling');
+    expect(hits('감염병 확산 모형을 세워 접종률에 따른 감염자 수를 예측함.')).toContain('modeling');
+    expect(hits('뉴턴의 냉각 법칙으로 냉각 모형을 세우고 실제 온도와 비교함.')).toContain('modeling');
+  });
+  it("'탐구를 설계함', '실험을 설계함', '만들기 부스에 참가'는 설계·제작이 아니다", () => {
+    expect(hits('‘온도에 따른 카탈레이스 활성 변화’를 주제로 모둠 탐구를 설계함.')).not.toContain('making');
+    expect(hits('과일 전지의 전압에 영향을 주는 요인을 주제로 모둠 실험을 설계함.')).not.toContain('making');
+    expect(hits('과학의 날 행사에서 물 로켓 만들기 부스에 참가하여 발사 각도를 바꿔 봄.')).not.toContain('making');
+    expect(hits('페트병으로 물 로켓을 만들어 발사 각도에 따른 비행 거리를 비교함.')).toContain('making');
+  });
+  it('체육의 체력 기록 측정과 다른 수업에서 측정한 자료의 입력은 실험·측정이 아니다', () => {
+    expect(hits('학기 초와 학기 말에 오래달리기와 윗몸 말아 올리기 기록을 측정하고 그 변화를 기록지에 정리함.')).not.toContain('experiment');
+    expect(hits('과학탐구실험1 시간에 측정한 온도별 카탈레이스 반응 자료를 직접 입력해 꺾은선그래프로 다시 그림.')).not.toContain('experiment');
+    expect(hits('온도별로 3회 반복 측정하여 평균을 구함.')).toContain('experiment');
+  });
+  it("'기후 정의의 관점에서 선진국의 책임을 설명함'처럼 목적어가 끼어도 개념 분석·해석이다", () => {
+    expect(hits('기후 정의의 관점에서 선진국의 책임을 설명함.')).toContain('analysis');
+  });
+});

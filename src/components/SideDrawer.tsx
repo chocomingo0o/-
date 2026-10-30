@@ -97,7 +97,7 @@ export function SideDrawer({ open, kicker, title, onClose, children, defaultWidt
       role={narrow ? 'dialog' : undefined}
       aria-modal={narrow ? true : undefined}
       onKeyDown={trapTab}
-      className={cn('noprint fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-hair bg-surface shadow-[0_0_0_1px_var(--ring)] md:static md:z-auto md:w-[var(--dw)] md:shrink-0 md:shadow-none')}
+      className={cn('noprint fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-hair bg-surface shadow-[0_0_0_1px_var(--ring)] md:sticky md:top-[var(--topbar-h,0px)] md:z-auto md:h-[calc(100vh-var(--topbar-h,0px))] md:w-[var(--dw)] md:shrink-0 md:self-start md:shadow-none')}
       style={{ '--dw': `${Math.min(w, typeof window !== 'undefined' ? window.innerWidth : w)}px` } as React.CSSProperties}
       aria-label={title || '옆 창'}
     >

@@ -105,11 +105,31 @@ const MAX_THEMES = 6;
  *
  * 겹침 합치기(점수 높은 순으로 보면서)
  * - 기록 집합의 자카드 유사도가 0.7을 넘으면 같은 주제
- * - 한 낱말이 다른 낱말을 품고('내성균' ⊂ '항생제내성균') 자카드가 0.3을 넘으면 같은 주제
- * 합쳐진 낱말은 words에, 기록은 ids에 더한다. 주제는 최대 6개까지만 새로 만들되,
+ * - 한 낱말이 주제의 낱말(대표 낱말이나 합쳐진 낱말) 하나를 품고('내성균' ⊃ '내성') 자카드가 0.3을 넘으면 같은 주제
+ * - 둘 다 관심 분야 사전(FIELD_TERMS) 낱말이고, 새 낱말의 기록이 3건 이상이며, 자카드가 0.4를 넘거나 새 낱말의 기록이 거의 모두(75% 이상) 기존 주제 안에 있으면
+ *   같은 관심의 다른 낱말이다('세균', '감염병', '미생물학' → '항생제'). 교사에게 관심 주제가 6개로 부풀려 보이지 않게 한다.
+ *   이때 그 주제의 다른 낱말이 본문에 하나도 없는 기록은 주제에 더하지 않는다('세균 수를 등비수열로'의 대수는 항생제 주제가 아니다)
+ * - 위 둘이 아니면서 새 낱말의 기록(2건 이상)이 모두 기존 주제의 기록 안에 있으면 그 주제의 한 갈래로 보고 버린다
+ *   ('활성', '기질' ⊂ '카탈레이스'). 따로 주제로 세우지 않고, 주제 낱말에도 넣지 않는다(형광펜과 연결 점수가 흔한 말로 넓어지지 않게)
+ * 합쳐진 낱말은 words에, 기록은 ids에 더한다. 이름은 대표 낱말이되, 대표 낱말이 관심 분야 낱말이 아니면 합쳐진 관심 분야 낱말
+ * (핵심 문장 기록 수 > 빈도 > 길이)을 이름으로 올린다('배출' 대신 '기후변화'). 주제는 최대 6개까지만 새로 만들되,
  * 이미 만든 주제에 합쳐지는 낱말('내성균' ⊂ '항생제내성균')은 6개가 찬 뒤에도 계속 합친다(형광펜·기록 집계에서 빠지지 않게).
  * 색은 THEME_COLORS를 순서대로 쓴다. 각 기록의 r.themes에 자기가 속한 주제 이름을 적는다.
  */
+/**
+ * 주제 이름. 대표 낱말(점수 1위)이 관심 분야 사전 낱말이면 그대로 쓴다.
+ * 아니면('배출') 합쳐진 낱말 가운데 관심 분야 낱말('기후변화', '온실가스', '국제기구')을 이름으로 올린다.
+ * 여럿이면 핵심 문장에 나온 기록 수(kdf) > 기록 안 빈도 합 > 길이 순. 교사가 알아볼 이름을 앞세우기 위한 것이다.
+ */
+function themeName(g: Group, kdf: Map<string, number>): string {
+  if (FIELD_TERMS.has(g.t)) return g.t;
+  const fieldWords = [g.t, ...g.alt].filter((w) => FIELD_TERMS.has(w));
+  if (!fieldWords.length) return g.t;
+  const freq = (w: string): number => g.rs.reduce((a, r) => a + Math.min(3, r.tf.get(w) ?? 0), 0);
+  fieldWords.sort((a, b) => (kdf.get(b) ?? 0) - (kdf.get(a) ?? 0) || freq(b) - freq(a) || b.length - a.length);
+  return fieldWords[0];
+}
+
 export function buildThemes(recs: Rec[], stats: Stats): Theme[] {
   const { N, df, kdf, cw } = stats;
   const dfLimit = Math.max(4, N * 0.3);
@@ -120,7 +140,8 @@ export function buildThemes(recs: Rec[], stats: Stats): Theme[] {
     if (d < 2) return;
     if ((df.get(t) ?? 0) > dfLimit) return;
     if (d < 3 && t.length < 3) return;
-    if (cw(t) < 0.5 && !FIELD_TERMS.has(t)) return;
+    // 관심 분야 낱말은 흔해도 받되, 어느 학생부에나 나오는 가장 흔한 말('역사', cw 0.25)은 뺀다
+    if (cw(t) < 0.5 && !(FIELD_TERMS.has(t) && cw(t) > 0.25)) return;
     const rs = recs.filter((r) => r.ktf.has(t) || (r.tf.get(t) ?? 0) >= 2);
     if (!rs.length) return;
     const lanes = new Set<LaneKey>(rs.map((r) => r.lane));
@@ -139,14 +160,43 @@ export function buildThemes(recs: Rec[], stats: Stats): Theme[] {
   const groups: Group[] = [];
   for (const c of cand) {
     const ids = new Set(c.rs.map((r) => r.id));
+    // 'word': 같은 주제의 다른 낱말로 합친다(words와 ids에 더함)
+    // 'field': 관심 분야 낱말끼리의 합침. 낱말은 더하되, 그 주제의 다른 낱말이 본문에 하나도 없는 기록은 더하지 않는다
+    // 'drop' : 새 낱말의 기록이 모두 기존 주제 안에 있음. 따로 주제로 세우지도, 주제 낱말로 더하지도 않는다
+    let how = null as 'word' | 'field' | 'drop' | null;
     const dup = groups.find((g) => {
       const inter = g.rs.filter((r) => ids.has(r.id)).length;
       const j = inter / (g.rs.length + c.rs.length - inter);
-      return ((g.t.includes(c.t) || c.t.includes(g.t)) && j > 0.3) || j > 0.7;
+      const gw = [g.t, ...g.alt];
+      if ((gw.some((w) => w.includes(c.t) || c.t.includes(w)) && j > 0.3) || j > 0.7) {
+        how = 'word';
+        return true;
+      }
+      // 관심 분야 낱말끼리 기록이 많이 겹치면 같은 관심(세균·감염병·미생물학 → 항생제)
+      const fieldWords = FIELD_TERMS.has(c.t) && gw.some((w) => FIELD_TERMS.has(w));
+      // 기록 두 건짜리 낱말('세계화 단원' 두 번)은 우연히 겹치기 쉬우므로 세 건 이상일 때만 이 규칙으로 합친다
+      if (fieldWords && c.rs.length >= 3 && (j > 0.4 || inter / c.rs.length >= 0.75)) {
+        how = 'field';
+        return true;
+      }
+      // 새 낱말의 기록이 모두 기존 주제 안에 있으면 그 주제의 한 갈래다('활성', '기질' ⊂ '카탈레이스')
+      if (c.rs.length >= 2 && inter === c.rs.length) {
+        how = 'drop';
+        return true;
+      }
+      return false;
     });
     if (dup) {
-      dup.alt.push(c.t);
-      for (const r of c.rs) if (!dup.rs.includes(r)) dup.rs.push(r);
+      const g: Group = dup;
+      if (how === 'drop') continue;
+      const before = [g.t, ...g.alt];
+      g.alt.push(c.t);
+      for (const r of c.rs) {
+        if (g.rs.includes(r)) continue;
+        // '세균 수를 등비수열로'(수열 단원 예시)처럼 낱말 하나만 우연히 겹친 기록은 관심 분야 합침으로 끌어오지 않는다
+        if (how === 'field' && !before.some((w) => r.tf.has(w))) continue;
+        g.rs.push(r);
+      }
       continue;
     }
     // 겹치지 않는 새 주제는 6개까지만. 그 뒤의 후보도 기존 주제에 합쳐질 수는 있으므로 break 하지 않는다
@@ -154,15 +204,18 @@ export function buildThemes(recs: Rec[], stats: Stats): Theme[] {
     groups.push({ t: c.t, alt: [], rs: c.rs.slice() });
   }
 
-  const themes: Theme[] = groups.map((g, i) => ({
-    name: g.t,
-    words: [g.t, ...g.alt],
-    ids: g.rs
-      .slice()
-      .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
-      .map((r) => r.id),
-    color: THEME_COLORS[i % THEME_COLORS.length],
-  }));
+  const themes: Theme[] = groups.map((g, i) => {
+    const name = themeName(g, kdf);
+    return {
+      name,
+      words: [name, ...[g.t, ...g.alt].filter((w) => w !== name)],
+      ids: g.rs
+        .slice()
+        .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
+        .map((r) => r.id),
+      color: THEME_COLORS[i % THEME_COLORS.length],
+    };
+  });
 
   for (const r of recs) r.themes = themes.filter((th) => th.ids.includes(r.id)).map((th) => th.name);
   return themes;

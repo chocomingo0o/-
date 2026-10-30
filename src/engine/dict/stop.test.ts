@@ -42,6 +42,8 @@ describe('불용어 집합', () => {
       '문제', '사례']) {
       expect(STOP.has(w), w).toBe(true);
     }
+    // '온도 대신 pH를 바꾸어'의 '대신'이 핵심어로 올라오지 않게 한다
+    expect(STOP.has('대신')).toBe(true);
   });
   it('STOP2 200개 이상, 핵심 낱말 포함', () => {
     expect(STOP2.size).toBeGreaterThanOrEqual(200);

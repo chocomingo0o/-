@@ -150,13 +150,13 @@ describe('buildLinks: 드문 낱말을 핵심 문장에서 함께 쓰면 연결�
   it('S0→S1, S1→S2, S1→S3 세 연결만 만든다', () => {
     expect(pairs(links).sort()).toEqual(['S0>S1', 'S1>S2', 'S1>S3'].sort());
   });
-  it('공유 낱말은 드문 순으로 최대 3개, 근거 첫 줄은 공통 낱말', () => {
+  it('공유 낱말은 최대 3개이고 관심 주제 이름이 먼저, 그다음 긴 낱말이 온다. 근거 첫 줄은 공통 낱말', () => {
     const l = pair(links, 'S0', 'S1')!;
     expect(l.words).toHaveLength(3);
     expect(l.words).toEqual(expect.arrayContaining(['카탈레이스', '과산화수소', '감자']));
-    // df 2인 낱말(감자)이 df 3인 낱말(카탈레이스, 과산화수소)보다 앞에 온다. 같은 df면 뒤 기록 본문 순서
-    expect(l.words).toEqual(['감자', '카탈레이스', '과산화수소']);
-    expect(l.lines[0]).toBe('공통 낱말: 감자, 카탈레이스, 과산화수소');
+    // 표시 순서는 점수(드문 순)와 따로 교사가 알아볼 낱말을 앞세운다: 관심 주제 이름(카탈레이스) > 3자 이상(과산화수소) > 그 외(감자)
+    expect(l.words).toEqual(['카탈레이스', '과산화수소', '감자']);
+    expect(l.lines[0]).toBe('공통 낱말: 카탈레이스, 과산화수소, 감자');
     expect(l.theme).toBe('카탈레이스');
     expect(l.sc).toBeGreaterThan(5);
     expect(l.cross).toBe(false);
@@ -204,10 +204,10 @@ describe('buildLinks: 연결 종류', () => {
     expect(l.lines).toContain('방법: 문헌·자료 조사 → 실험·측정');
     expect(l.lines).toContain('탐구 깊이: 2단계(조사·분석) → 3단계(실험·자료 생산)');
     expect(l.sent).toBe(
-      '1학년 통합과학1의 ‘감자, 카탈레이스, 과산화수소’ 같은 낱말이 1학년 과학탐구실험1에서 다시 나옵니다. '
+      '1학년 통합과학1의 ‘카탈레이스, 과산화수소, 감자’ 같은 낱말이 1학년 과학탐구실험1에서 다시 나옵니다. '
         + '같은 교과군 안에서 이어졌고, 방법은 문헌·자료 조사에서 실험·측정으로 바뀌었고, 탐구 깊이는 2단계에서 3단계로 올라갔습니다.',
     );
-    expect(l.head).toBe('‘감자, 카탈레이스’');
+    expect(l.head).toBe('‘카탈레이스, 과산화수소’');
     expect(l.detail).toBe('문헌·자료 조사 → 실험·측정 / 깊이 2→3');
     expect(l.why).toBe('카탈레이스 / 깊이 2→3');
   });
@@ -233,23 +233,28 @@ describe('buildLinks: 연결 종류', () => {
     const l = pair(links, 'S1', 'S3')!;
     expect(l.rel).toBe('동시');
     expect(l.theme).toBe('거품');
-    expect(l.sent).toBe('1학년 같은 시기에 과학탐구실험1과 공통수학2에서 ‘지수함수, 반응속도, 거품’ 같은 낱말을 함께 다뤘습니다.');
+    // 관심 주제 이름(거품)이 공통 낱말 맨 앞에 온다
+    expect(l.sent).toBe('1학년 같은 시기에 과학탐구실험1과 공통수학2에서 ‘거품, 지수함수, 반응속도’ 같은 낱말을 함께 다뤘습니다.');
     expect(l.detail).toBe('과학, 수학 함께 다룸');
-    expect(l.why).toBe('거품 / 같은 시기');
-    // 같은 시기 연결의 머리에는 방향 화살표를 쓰지 않는다
-    expect(l.head).toBe('‘지수함수, 반응속도’ / 과학, 수학 같은 시기');
+    // 카드 한 줄에는 종류 이름('같은 시기', '동시')을 쓰지 않는다(카드가 종류 칩을 따로 붙인다). 교과군이 다르면 두 교과군을 적는다
+    expect(l.why).toBe('거품 / 과학, 수학');
+    expect(l.why).not.toMatch(/같은 시기|동시/);
+    // 같은 시기 연결의 머리에는 방향 화살표를 쓰지 않고, 카드의 종류 칩과 겹치는 종류 이름('같은 시기')도 쓰지 않는다
+    expect(l.head).toBe('‘거품, 지수함수’ / 과학, 수학');
+    expect(l.head).not.toMatch(/같은 시기|동시/);
     // 같은 시기 쌍은 한 번만(배열에서 앞선 기록이 from)
     expect(pair(links, 'S3', 'S1')).toBeUndefined();
   });
 
   it('같은 교과군에서 깊이가 같고 2단계 이상 새 방법이 있으면 전환', () => {
+    // 경제는 통합사회와 같은 교과군이지만 같은 과목 계열(subjectFamily)은 아니다
     const recs = [
       rec({
         id: 'A0', subj: '통합사회1', lane: '사회', year: 1, sem: 1, depth: 2, methods: ['literature', 'discussion'],
         tf: { 기후정의: 2, 해수면: 1, 배출량: 1 }, ktf: ['기후정의', '해수면', '배출량'],
       }),
       rec({
-        id: 'A1', subj: '사회와 문화', lane: '사회', year: 2, sem: 1, depth: 2, methods: ['literature', 'proposal'],
+        id: 'A1', subj: '경제', lane: '사회', year: 2, sem: 1, depth: 2, methods: ['literature', 'proposal'],
         tf: { 기후정의: 1, 해수면: 2, 배출량: 1 }, ktf: ['기후정의', '해수면', '배출량'],
       }),
     ];
@@ -271,7 +276,7 @@ describe('buildLinks: 연결 종류', () => {
         tf: { 기후정의: 2, 해수면: 1, 배출량: 1 }, ktf: ['기후정의', '해수면', '배출량'],
       }),
       rec({
-        id: 'A1', subj: '사회와 문화', lane: '사회', year: 2, sem: 1, depth: 2, methods: ['literature'],
+        id: 'A1', subj: '경제', lane: '사회', year: 2, sem: 1, depth: 2, methods: ['literature'],
         tf: { 기후정의: 1, 해수면: 2, 배출량: 1 }, ktf: ['기후정의', '해수면', '배출량'],
       }),
     ];
@@ -283,7 +288,9 @@ describe('buildLinks: 연결 종류', () => {
     expect(l.lines).toContain('방법: 문헌·자료 조사 그대로');
     expect(l.sent).toContain('방법은 문헌·자료 조사 그대로였고');
     expect(l.sent).toContain('탐구 깊이는 2단계 그대로입니다.');
-    expect(l.why).toMatch(/ \/ 반복\(깊이 2→2\)$/);
+    // 카드 한 줄에는 종류 이름을 쓰지 않고 내용만 적는다('반복(깊이 2→2)' → '깊이 2→2')
+    expect(l.why).toMatch(/^(기후정의|해수면|배출량) \/ 깊이 2→2$/);
+    expect(l.why).not.toContain('반복');
   });
 
   it('깊이가 내려가도 교과군이 바뀌면 확장이고, 근거 줄과 한 줄에 얕아짐을 적는다', () => {
@@ -418,18 +425,26 @@ describe('buildLinks: 뒤 기록이 앞 과목을 직접 언급하면 공유 낱
     expect(pairs(mk('실험 결과를 설명함.'))).toEqual([]);
   });
 
-  it('창체 기록은 과목명이 아니므로 직접 언급 대상이 아니다', () => {
-    const recs = [
-      rec({
-        id: 'G0', kind: '창체', subj: '동아리활동 (생명과학탐구반)', lane: '동아리', year: 1, sem: null, depth: 3, methods: ['experiment'],
-        tf: { 콜로니: 2 }, ktf: ['콜로니'], text: '콜로니 수를 셈.',
-      }),
-      rec({
-        id: 'G1', subj: '생명과학', lane: '과학', year: 2, sem: 1, depth: 3, methods: ['experiment'],
-        tf: { 한천: 1 }, ktf: ['한천'], text: '1학년 때 동아리활동 (생명과학탐구반)에서 했던 실험을 떠올림.',
-      }),
-    ];
-    expect(buildLinks(recs, stats(recs), [], student())).toEqual([]);
+  it('창체 언급은 앞 학년 접두어와 공유 낱말이 함께 있어야 직접 언급이 된다', () => {
+    const mk = (tf2: Record<string, number>, text: string) => {
+      const recs = [
+        rec({
+          id: 'G0', kind: '창체', subj: '동아리활동 (생명과학탐구반)', lane: '동아리', year: 1, sem: null, depth: 3, methods: ['experiment'],
+          tf: { 콜로니: 2 }, ktf: ['콜로니'], text: '콜로니 수를 셈.',
+        }),
+        rec({ id: 'G1', subj: '생명과학', lane: '과학', year: 2, sem: 1, depth: 3, methods: ['experiment'], tf: tf2, ktf: Object.keys(tf2), text }),
+      ];
+      return buildLinks(recs, stats(recs), [], student());
+    };
+    // 창체는 과목명처럼 하나를 가리키지 못하므로, 공유 낱말이 없으면 언급만으로 잇지 않는다
+    expect(mk({ 한천: 1 }, '1학년 때 동아리활동 (생명과학탐구반)에서 했던 실험을 떠올림.')).toEqual([]);
+    // 공유 낱말(콜로니)이 있으면 직접 언급으로 잇는다
+    const ok = mk({ 콜로니: 1 }, '1학년 동아리에서 진행한 콜로니 실험을 떠올림.');
+    expect(pairs(ok)).toEqual(['G0>G1']);
+    expect(ok[0].cite).toBe(true);
+    expect(ok[0].lines).toContain('뒤 기록이 ‘1학년 동아리활동 (생명과학탐구반)’을 직접 언급함');
+    // 학년이 다르면 그 창체가 아니다
+    expect(mk({ 콜로니: 1 }, '2학년 동아리에서 진행한 콜로니 실험을 떠올림.').some((l) => l.cite)).toBe(false);
   });
 });
 
@@ -533,8 +548,17 @@ describe('예시 학생(sampleStudent)에서', () => {
       expect(a).toBeDefined();
       expect(b).toBeDefined();
       expect(a.id).not.toBe(b.id);
-      expect(a.t).toBeLessThanOrEqual(b.t);
-      expect(l.rel === '동시').toBe(a.t === b.t);
+      if (l.rel === '동시') expect(a.t).toBe(b.t);
+      else if (a.t > b.t) {
+        // 같은 학년 창체를 언급한 1학기 세특: 창체 → 세특으로 뒤집었고 근거 줄에 그 까닭을 적는다
+        expect(a.kind).toBe('창체');
+        expect(a.year).toBe(b.year);
+        expect(l.lines.some((x) => x.includes('순서로 놓음'))).toBe(true);
+      } else if (a.t === b.t) {
+        // 같은 학기라도 한쪽이 다른 쪽을 직접 언급하면 동시가 아니라 앞뒤가 정해진 연결이다
+        expect(l.cite).toBe(true);
+        expect(l.lines.some((x) => x.startsWith('같은 학기 기록이지만'))).toBe(true);
+      }
       expect(LINK_KINDS[l.rel]).toBeDefined();
       expect(l.words.length).toBeGreaterThan(0);
       expect(l.words.length).toBeLessThanOrEqual(3);
@@ -564,15 +588,21 @@ describe('예시 학생(sampleStudent)에서', () => {
     });
   });
 
-  it('1학년 과목을 직접 언급한 2학년 기록은 그 과목과 cite로 이어진다', () => {
+  it('앞 과목(또는 앞 학년 창체)을 직접 언급한 기록은 그 기록과 cite로 이어진다', () => {
     const cites = links.filter((l) => l.cite);
     expect(cites.length).toBeGreaterThan(0);
     for (const l of cites) {
       const a = byId.get(l.from)!;
-      expect(a.kind).toBe('세특');
-      expect(a.year).toBe(1);
+      const b = byId.get(l.to)!;
+      expect(a.year).toBeLessThanOrEqual(b.year);
+      // 창체 언급은 '1학년 동아리에서 진행한'처럼 앞 학년일 때만 직접 언급이다
+      if (a.kind === '창체') expect(a.year).toBeLessThan(b.year);
       expect(l.lines.some((x) => x.includes('직접 언급함'))).toBe(true);
     }
+    // 대수 세특의 '1학년 동아리에서 진행한 … 카탈레이스 반응 실험'은 1학년 동아리(생명과학탐구반)를 가리킨다
+    const club = recs.find((r) => r.subj === '동아리활동(생명과학탐구반)')!;
+    const alg = recs.find((r) => r.subj === '대수')!;
+    expect(pair(links, club.id, alg.id)?.cite).toBe(true);
     // 2학년 생명과학 세특이 '1학년 때 과학탐구실험1 시간에 수행했던 ...'을 언급한다
     const bio = recs.find((r) => r.year === 2 && r.kind === '세특' && /생명과학/.test(r.subj));
     const exp1 = recs.find((r) => r.year === 1 && r.kind === '세특' && /과학탐구실험1/.test(r.subj));
@@ -693,5 +723,160 @@ describe('linkReason 문장: 가운뎃점은 고유 라벨에만, 깊이가 같�
     expect(LINK_KINDS['전환'].desc).not.toContain('비슷함');
     expect(LINK_KINDS['전환'].hint).not.toContain('그대로입니다');
     expect(LINK_KINDS['반복'].desc).toContain('깊이');
+  });
+});
+
+/* ───────────────────────── 검수 뒤 보강: 과목 계열, 같은 학기 직접 언급, 창체 자리, 창체 선후 ───────────────────────── */
+describe('buildLinks: 같은 과목 계열(subjectFamily)', () => {
+  it("통합사회1 → 사회와 문화는 '같은 과목 계열'로 잇고, '같은 과목'이라고 하지 않는다", () => {
+    const recs = [
+      rec({
+        id: 'K0', subj: '통합사회1', lane: '사회', year: 1, sem: 1, depth: 2, methods: ['literature'],
+        tf: { 기후정의: 2, 해수면: 1 }, ktf: ['기후정의'],
+      }),
+      rec({
+        id: 'K1', subj: '사회와 문화', lane: '사회', year: 2, sem: 1, depth: 2, methods: ['literature'],
+        tf: { 기후정의: 1, 해수면: 1 }, ktf: ['해수면'],
+      }),
+    ];
+    const links = buildLinks(recs, stats(recs), [], student());
+    expect(pairs(links)).toEqual(['K0>K1']);
+    const l = links[0];
+    expect(l.ss).toBe(true);
+    expect(l.lines).toContain('같은 과목 계열의 후속 기록: 통합사회1 → 사회와 문화');
+    expect(l.sent).toContain('같은 과목 계열 안에서 이어졌고');
+    expect(l.sent).not.toContain('같은 과목 안에서');
+    expect(l.head).toMatch(/ \/ 같은 과목 계열$/);
+    expect(l.why).toMatch(/^같은 계열 \/ /);
+  });
+});
+
+describe('buildLinks: 같은 학기라도 직접 언급이 있으면 앞뒤가 정해진 연결이다', () => {
+  it('뒤 기록(배열 뒤)이 앞 기록을 언급하면 앞 → 뒤, 종류는 깊이 규칙대로', () => {
+    const recs = [
+      rec({
+        id: 'L0', subj: '통합과학1', lane: '과학', year: 1, sem: 1, depth: 3, methods: ['experiment'],
+        tf: { 카탈레이스: 2, 간조각: 1 }, ktf: ['카탈레이스', '간조각'], text: '간 조각을 과산화수소수에 넣어 기포 발생을 관찰함.',
+      }),
+      rec({
+        id: 'L1', subj: '과학탐구실험1', lane: '과학', year: 1, sem: 1, depth: 4, methods: ['experiment', 'data'],
+        tf: { 카탈레이스: 2, 간조각: 1 }, ktf: ['카탈레이스', '간조각'],
+        text: '통합과학1 시간에 다루었던 간 조각 관찰에서 생긴 궁금증을 탐구 질문으로 구체화함.',
+      }),
+    ];
+    const links = buildLinks(recs, stats(recs), [], student());
+    expect(pairs(links)).toEqual(['L0>L1']);
+    const l = links[0];
+    expect(l.rel).toBe('심화');
+    expect(l.cite).toBe(true);
+    expect(l.lines.some((x) => x.startsWith('같은 학기 기록이지만') && x.endsWith('통합과학1 → 과학탐구실험1 순서로 놓음'))).toBe(true);
+  });
+  it('앞 기록(배열 앞)이 뒤 기록을 언급하면 방향을 뒤집는다(생명과학 → 대수)', () => {
+    const recs = [
+      rec({
+        id: 'M0', subj: '대수', lane: '수학', year: 2, sem: 1, depth: 4, methods: ['modeling', 'data'],
+        tf: { 기질: 2, 포화: 1 }, ktf: ['기질', '포화'], text: '생명과학 시간에 본 기질 농도 그래프는 포화되는 모양이어서 지수함수로는 설명하기 어렵다고 지적함.',
+      }),
+      rec({
+        id: 'M1', subj: '생명과학', lane: '과학', year: 2, sem: 1, depth: 3, methods: ['modeling'],
+        tf: { 기질: 1, 포화: 1 }, ktf: ['기질', '포화'], text: '기질 농도가 높아지면 효소가 포화되는 까닭을 설명함.',
+      }),
+    ];
+    const links = buildLinks(recs, stats(recs), [], student());
+    expect(pairs(links)).toEqual(['M1>M0']);
+    expect(links[0].rel).toBe('심화');
+    expect(links[0].cite).toBe(true);
+    expect(links[0].lines).toContain('뒤 기록이 ‘2학년 생명과학’을 직접 언급함');
+  });
+  it('직접 언급이 없는 같은 학기·같은 교과군 기록은 핵심 낱말이 세 개 이상 겹쳐야 동시로 잇는다', () => {
+    const mk = (ktf1: string[]) => {
+      const recs = [
+        rec({ id: 'N0', subj: '물리학', lane: '과학', year: 2, sem: 1, depth: 3, methods: ['experiment'], tf: { 전극: 2, 전압: 2, 아연판: 2 }, ktf: ['전극', '전압', '아연판'] }),
+        rec({ id: 'N1', subj: '화학', lane: '과학', year: 2, sem: 1, depth: 3, methods: ['experiment'], tf: { 전극: 2, 전압: 2, 아연판: 2 }, ktf: ktf1 }),
+      ];
+      return buildLinks(recs, stats(recs), [], student());
+    };
+    expect(mk(['전극', '전압', '아연판']).map((l) => l.rel)).toEqual(['동시']);
+    expect(mk(['전극', '전압'])).toEqual([]);
+  });
+});
+
+describe('buildLinks: 공통 관심 주제가 있는 교과↔창체 후보는 한 자리를 따로 받는다', () => {
+  const mk = (clubKey: string[]) => {
+    const recs = [
+      rec({
+        id: 'P0', subj: '과학탐구실험1', lane: '과학', year: 1, sem: 1, depth: 4, methods: ['experiment'],
+        tf: { 기질: 1, 포화: 1, 저해제: 1 }, ktf: ['기질', '포화', '저해제'], text: '효소 실험을 함.',
+      }),
+      rec({
+        id: 'P1', kind: '창체', subj: '동아리활동 (생명과학탐구반)', lane: '동아리', year: 1, sem: null, depth: 4, methods: ['experiment'],
+        tf: { 기질: 1, 포화: 1, 저해제: 1 }, ktf: clubKey, text: '기질 농도별 반응 속도를 측정함.',
+      }),
+      rec({
+        id: 'P2', subj: '생명과학', lane: '과학', year: 2, sem: 1, depth: 3, methods: ['modeling'],
+        tf: { 기질: 1, 포화: 1, 저해제: 1 }, ktf: ['기질', '포화', '저해제'], text: '1학년 때 과학탐구실험1 시간에 수행했던 효소 실험을 다시 꺼내어 설명함.',
+      }),
+    ];
+    const themes = [theme('효소', ['P0', 'P1', 'P2'])];
+    return buildLinks(recs, stats(recs), themes, student());
+  };
+  it('직접 언급 후보(1위)의 55%에 못 미쳐도 핵심 낱말 세 개를 나누면 남긴다(동아리 → 생명과학)', () => {
+    const links = mk(['기질', '포화', '저해제']);
+    expect(pair(links, 'P0', 'P2')?.cite).toBe(true);
+    const l = pair(links, 'P1', 'P2');
+    expect(l).toBeDefined();
+    expect(l!.cc).toBe(true);
+    expect(l!.sc).toBeLessThan(pair(links, 'P0', 'P2')!.sc * 0.55);
+  });
+  it('핵심 낱말이 두 개만 겹치면 따로 자리를 받지 않는다', () => {
+    const links = mk(['기질', '포화']);
+    expect(pair(links, 'P1', 'P2')).toBeUndefined();
+  });
+});
+
+describe('buildLinks: 같은 학년의 창체 ↔ 세특 선후', () => {
+  const mk = (chemText: string) => {
+    const recs = [
+      rec({
+        id: 'Q0', subj: '화학', lane: '과학', year: 2, sem: 1, depth: 3, methods: ['literature'],
+        tf: { 에탄올: 1, 세정제: 1, 억제대: 1 }, ktf: ['에탄올', '세정제', '억제대'], text: chemText,
+      }),
+      rec({
+        id: 'Q1', kind: '창체', subj: '동아리활동 (미생물탐구반)', lane: '동아리', year: 2, sem: null, depth: 4, methods: ['experiment'],
+        tf: { 에탄올: 1, 세정제: 1, 억제대: 1 }, ktf: ['에탄올', '세정제', '억제대'], text: '손 세정제 종류에 따른 억제대 지름을 비교함.',
+      }),
+    ];
+    return buildLinks(recs, stats(recs), [], student());
+  };
+  it('1학기 세특이 같은 학년 창체에서 한 활동을 언급하면 창체 → 세특으로 놓는다', () => {
+    const links = mk('동아리에서 진행한 손 세정제의 세균 억제 효과 비교 실험에서 본 에탄올 함량 표기를 계기로 살균 효과를 조사함.');
+    expect(pairs(links)).toEqual(['Q1>Q0']);
+    expect(links[0].lines).toContain('화학 세특이 같은 학년의 동아리활동 (미생물탐구반)에서 한 활동을 언급하므로 동아리활동 (미생물탐구반) → 화학 순서로 놓음');
+  });
+  it('언급이 없으면 학기 순서(세특 1학기 → 창체)로 두되 선후를 확정할 수 없다고 적는다', () => {
+    const links = mk('에탄올 농도와 살균 효과를 조사함.');
+    expect(pairs(links)).toEqual(['Q0>Q1']);
+    expect(links[0].lines.some((x) => x.startsWith('창의적 체험활동은 학기 구분이 없어'))).toBe(true);
+  });
+  it('다른 학년이 적힌 창체 언급(1학년 동아리에서)은 같은 학년 창체로 보지 않는다', () => {
+    const links = mk('1학년 동아리에서 진행한 손 세정제 실험에서 본 에탄올 함량 표기를 계기로 조사함.');
+    expect(pairs(links)).toEqual(['Q0>Q1']);
+  });
+});
+
+describe('buildLinks: 카드 한 줄(why)에는 연결 종류 이름이 없다', () => {
+  it('예시 학생의 모든 연결', () => {
+    const S = sampleStudent();
+    const recs = buildRecords(S);
+    const ctx = buildCtx(S);
+    for (const r of recs) analyzeRecord(r, ctx);
+    const st = buildStats(recs);
+    const themes = buildThemes(recs, st);
+    assignTopics(recs, keywordFn(st), themes);
+    const links = buildLinks(recs, st, themes, S);
+    for (const l of links) {
+      expect(l.why).not.toMatch(/심화|확장|전환|반복|같은 시기|동시/);
+      expect(l.why).not.toMatch(/ · /);
+    }
   });
 });

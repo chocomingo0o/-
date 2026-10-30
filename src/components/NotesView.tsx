@@ -40,7 +40,8 @@ export function NotesView({ an, student, compact }: { an: Analysis; student: Stu
     toast(`계보도에서 ‘${name}’ 관심 주제를 강조합니다.`);
   };
 
-  const points = <Points an={an} memo={memo} compact={!!compact} onAdd={addMemo} onOpen={openRec} onTheme={showTheme} />;
+  // key: 학생이 바뀌면 종류 거르기를 '모두'로 되돌린다(다른 학생에게 없는 종류가 눌린 채 남지 않게).
+  const points = <Points key={student.id} an={an} memo={memo} compact={!!compact} onAdd={addMemo} onOpen={openRec} onTheme={showTheme} />;
   const memoBox = <MemoBox memo={memo} compact={!!compact} onChange={(t) => dispatch({ type: 'setMemo', text: t })} onToast={toast} />;
   const recMemos = <RecMemos an={an} student={student} onOpen={openRec} />;
 
@@ -96,12 +97,14 @@ function Points({ an, memo, compact, onAdd, onOpen, onTheme }: {
   an: Analysis; memo: string; compact: boolean;
   onAdd: (t: string) => void; onOpen: (id: string) => void; onTheme: (name: string) => void;
 }) {
-  const [filter, setFilter] = useState<Tag | 'all'>('all');
+  const [picked, setFilter] = useState<Tag | 'all'>('all');
   const counts = useMemo(() => {
     const c: Record<Tag, number> = { s: 0, g: 0, q: 0, d: 0 };
     for (const p of an.insights) c[p.tg]++;
     return c;
   }, [an.insights]);
+  // 다시 분석해 고른 종류가 없어지면(사전 변경 등) '모두'로 본다.
+  const filter: Tag | 'all' = picked !== 'all' && !counts[picked] ? 'all' : picked;
   const list = filter === 'all' ? an.insights : an.insights.filter((p) => p.tg === filter);
   const byId = (id: string): Rec | undefined => an.recs.find((r) => r.id === id);
 
@@ -230,7 +233,7 @@ function RecMemos({ an, student, onOpen }: { an: Analysis; student: StudentEntry
   return (
     <div>
       <SectionTitle sub="기록 상세 창에서 적은 메모입니다. 누르면 그 기록으로 갑니다.">
-        기록별 메모 <span className="num ml-1 text-[13px] font-normal text-muted">{items.length}개</span>
+        기록별 메모 <span className="num ml-1 text-[13px] font-normal text-muted">{items.length}건</span>
       </SectionTitle>
       {items.length ? (
         <ul className="divide-y divide-hair">
