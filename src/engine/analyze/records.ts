@@ -35,7 +35,7 @@ export function semLabel(r: { year: Year; sem: Sem | null }): string {
 /* ───────────────────────── 과목명 다루기 ───────────────────────── */
 
 /** 자율적 교육과정 세특의 이름 */
-const SELF_DIRECTED = /^자율적?\s*교육과정$/;
+const SELF_DIRECTED = /^(?:자율적?\s*교육과정|학교자율과정)$/;
 
 /** 과목명 비교용: 공백을 빼고 끝의 영문 I·II·III를 로마 숫자로 통일한다. */
 function keyName(name: string): string {

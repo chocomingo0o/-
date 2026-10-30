@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Cell, Page, StudentRecord, TextItem } from '../types';
-import { curriculumOf, parseCells, parseStudent, splitSeteuk, validPrefix } from './parse';
+import { curriculumOf, parseCells, parseStudent, splitClubs, splitSeteuk, validPrefix } from './parse';
 
 /** 셀 하나. text가 배열이면 여러 줄 */
 const C = (x: number, y: number, w: number, h: number, text: string | string[] = '', page = 0): Cell => {
@@ -69,12 +69,50 @@ describe('splitSeteuk', () => {
     expect(seteuk[0].text).toBe('알 수 없는 과목: 내용 하나. 이어지는 줄. 또 모르는 줄.');
     expect(warnings).toEqual(['과목명을 찾지 못한 세특 문단이 있습니다.']);
   });
+  it("2015 개정 '학교자율과정 :' 문단은 앞 과목에 섞지 않고 별도 세특으로 나눈다", () => {
+    const { seteuk, warnings } = splitSeteuk([{
+      year: 2,
+      lines: [
+        '통합과학1: 효소의 활성을 온도별로 측정함.',
+        '학교자율과정 : 지역 하천의 수질을 조사하고 보고서를 씀.',
+        '학교 자율 과정：두 번째 주제로 토양 산성도를 측정함.',
+      ],
+    }], known);
+    expect(warnings).toEqual([]);
+    expect(seteuk.map(x => [x.names, x.text])).toEqual([
+      [['통합과학1'], '효소의 활성을 온도별로 측정함.'],
+      [['학교자율과정'], '지역 하천의 수질을 조사하고 보고서를 씀.'],
+      [['학교자율과정'], '두 번째 주제로 토양 산성도를 측정함.'],
+    ]);
+  });
   it('여러 덩어리(쪽이 나뉜 세특)도 이어서 읽는다', () => {
     const { seteuk } = splitSeteuk([
       { year: 1, lines: ['통합과학1: 앞 쪽의 내용이며'] },
       { year: 1, lines: ['다음 쪽으로 이어짐.'] },
     ], known);
     expect(seteuk).toEqual([{ year: 1, sem: null, names: ['통합과학1'], text: '앞 쪽의 내용이며 다음 쪽으로 이어짐.' }]);
+  });
+});
+
+describe('splitClubs', () => {
+  it("특기사항 첫머리의 '(동아리명)(N시간)'을 영역 이름과 시간으로 옮긴다", () => {
+    expect(splitClubs([{ year: 1, area: '동아리활동', hours: 68, text: '(생명과학탐구부)(34시간) 효소 실험을 설계함.' }]))
+      .toEqual([{ year: 1, area: '동아리활동(생명과학탐구부)', hours: 34, text: '효소 실험을 설계함.' }]);
+  });
+  it('한 칸에 동아리가 여럿이면 문장 끝 뒤의 표시마다 나눈다', () => {
+    const out = splitClubs([{ year: 2, area: '동아리활동', hours: 51, text: '(천문부)(34시간) 별의 시차를 측정함. (토론부)(17시간) 기후 정책 토론에 참여함.' }]);
+    expect(out.map(c => [c.area, c.hours, c.text])).toEqual([
+      ['동아리활동(천문부)', 34, '별의 시차를 측정함.'],
+      ['동아리활동(토론부)', 17, '기후 정책 토론에 참여함.'],
+    ]);
+  });
+  it('문장 가운데의 괄호나 시간 표시가 없는 이름, 동아리 밖 영역은 건드리지 않는다', () => {
+    const list = [
+      { year: 1 as const, area: '동아리활동', hours: 30, text: '(과학탐구반) 식물의 광합성 속도를 측정함.' },
+      { year: 1 as const, area: '동아리활동', hours: 30, text: '실험 계획서를 쓰고 발표 자료(그림)(2시간 분량)를 만듦.' },
+      { year: 1 as const, area: '진로활동', hours: 20, text: '(진로캠프)(6시간) 연구원 강연을 들음.' },
+    ];
+    expect(splitClubs(list)).toEqual(list);
   });
 });
 
@@ -191,6 +229,18 @@ describe('parseCells 그 밖의 양식', () => {
     expect(S.courses).toHaveLength(1);
     expect(S.courses[0]).toMatchObject({ year: 2, name: '대수', rank: 2 });
     expect(S.years).toEqual([2]);
+  });
+  it("머리글이 '학점수 원점수/과목평균'처럼 학점 칸 하나에 합쳐 찍혀도 학점과 원점수 열을 나눠 읽는다", () => {
+    const s: Cell[] = [
+      C(30, 800, 120, 16, '교과학습발달상황'),
+      C(30, 780, 60, 16, '[3학년]'),
+      C(30, 760, 100, 18, '<진로 선택 과목>'),
+      ...row(PCOLS, 720, 36, ['학기', '교과', '과목', '학점수 원점수/과목평균', '', ['성취도', '(수강자수)'], ['성취도별', '분포비율'], '비고']),
+      ...row(PCOLS, 698, 22, ['1', '과학', '생명과학Ⅱ', '3', '91/78.5', 'A(85)', 'A(45.0) B(35.0) C(20.0)', '']),
+    ];
+    const S = parseCells(s);
+    expect(S.courses).toHaveLength(1);
+    expect(S.courses[0]).toMatchObject({ year: 3, name: '생명과학Ⅱ', kind: 'career', credit: 3, raw: 91, avg: 78.5, ach: 'A', n: 85 });
   });
   it('성적표가 없으면 경고하고, 낱글자로 떨어진 과목명을 붙인다', () => {
     const S0 = parseCells([C(30, 800, 535, 18, '7. 교과학습발달상황')]);

@@ -177,6 +177,13 @@ describe('buildRecords 가장자리 경우', () => {
     expect(r.sem).toBeNull();
     expect(r.t).toBe(2.5);
   });
+  it('2015 개정의 학교자율과정도 융합(자율과정) 교과군', () => {
+    const S = emptyStudent();
+    S.seteuk.push({ year: 2, sem: null, names: ['학교자율과정'], text: LONG });
+    const [r] = buildRecords(S);
+    expect(r.lane).toBe('융합(자율과정)');
+    expect(r.subj).toBe('학교자율과정');
+  });
   it('과목 미확인 세특도 기록으로 만든다(교과군은 교양·기타)', () => {
     const S = emptyStudent();
     S.seteuk.push({ year: 1, sem: 1, names: ['(과목 미확인)'], text: LONG });

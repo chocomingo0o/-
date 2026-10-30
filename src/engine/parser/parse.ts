@@ -28,9 +28,9 @@
  * 개인정보: 학적사항·수여기관의 학교명은 '○○고등학교'로 가린다.
  * 출결·학교폭력은 StudentRecord에 자리가 없어 읽지 않고 건너뛴다. 수상·독서는 선택 필드(awards, reading)에 넣는다.
  */
-import type { Cell, Course, Page, Sem, Seteuk, StudentRecord, TextItem, Year } from '../types';
+import type { Cell, Changche, Course, Page, Sem, Seteuk, StudentRecord, TextItem, Year } from '../types';
 import type { Line } from '../pdf/extract';
-import { buildCells, joinLines, norm, nos } from './cells';
+import { buildCells, buildJoinLexicon, joinLines, norm, nos, type JoinLexicon } from './cells';
 
 /* ───────────── 섹션 ───────────── */
 export type SectionKey = 'basic' | 'attend' | 'award' | 'cert' | 'violence' | 'changche' | 'course' | 'reading' | 'behavior';
@@ -99,16 +99,22 @@ export function validPrefix(p: string, known: Set<string>): string[] | null {
   return res.length ? res : null;
 }
 
+/** 과목이 아닌 별도 세특의 줄머리: '자율적 교육과정 …', '학교자율과정 : …' */
+export const SELF_DIRECTED_HEAD = /^\s*(자율적\s*교육\s*과정|학교\s*자율\s*과정)\s*[:：]?\s*/;
+
 /** 세특 본문 덩어리들을 과목별 세특으로 나눈다 */
-export function splitSeteuk(pending: PendingSeteuk[], known: Set<string>): { seteuk: Seteuk[]; warnings: string[] } {
+export function splitSeteuk(pending: PendingSeteuk[], known: Set<string>, lex?: JoinLexicon): { seteuk: Seteuk[]; warnings: string[] } {
   const out: (Seteuk & { lines: string[] })[] = [];
   const warnings: string[] = [];
   let cur: (Seteuk & { lines: string[] }) | null = null;
   let warned = false;
   for (const blk of pending) {
     for (const ln of blk.lines) {
-      if (/^자율적\s*교육과정/.test(ln)) {
-        cur = { year: blk.year, sem: null, names: ['자율적교육과정'], text: '', lines: [ln.replace(/^자율적\s*교육과정\s*[:：]?\s*/, '')] };
+      const auto = SELF_DIRECTED_HEAD.exec(ln);
+      if (auto) {
+        // 2022 개정 '자율적 교육과정', 2015 개정 일부 학교의 '학교자율과정'은 과목이 아닌 별도 세특이다.
+        const label = /학교/.test(auto[1]) ? '학교자율과정' : '자율적교육과정';
+        cur = { year: blk.year, sem: null, names: [label], text: '', lines: [ln.slice(auto[0].length)] };
         out.push(cur);
         continue;
       }
@@ -126,7 +132,7 @@ export function splitSeteuk(pending: PendingSeteuk[], known: Set<string>): { set
       }
     }
   }
-  const seteuk: Seteuk[] = out.map(s => ({ year: s.year, sem: s.sem, names: s.names, text: joinLines(s.lines) })).filter(s => s.text);
+  const seteuk: Seteuk[] = out.map(s => ({ year: s.year, sem: s.sem, names: s.names, text: joinLines(s.lines, lex) })).filter(s => s.text);
   return { seteuk, warnings };
 }
 
@@ -184,6 +190,9 @@ export function parseCells(input: Cell[]): StudentRecord {
     hakjeok: [], warnings: [], years: [],
   };
   const hakjeok = S.hakjeok as string[];
+  // 줄 경계 띄어쓰기 판단용 낱말 사전(문서 전체의 줄에서 만든다)
+  const lex = buildJoinLexicon(stream.flatMap(c => c.lines));
+  const join = (lines: string[]) => joinLines(lines, lex);
   // 쪽별 셀(같은 줄 찾기용)
   const byPage: Cell[][] = [];
   for (const c of stream) (byPage[c.page] ||= []).push(c);
@@ -250,7 +259,7 @@ export function parseCells(input: Cell[]): StudentRecord {
       }
       if (awCols && Math.abs(c.x - awCols.name.x) < 3 && t && !/해당\s*사항\s*없음/.test(t)) {
         const cy = c.y + c.h / 2;
-        const at = (col: Col | null) => { const o = atCol(c.page, col, cy); return o ? joinLines(o.lines) : ''; };
+        const at = (col: Col | null) => { const o = atCol(c.page, col, cy); return o ? join(o.lines) : ''; };
         const left = onPage(c.page).filter(o => o.x < c.x - 1 && o.y <= cy && o.y + o.h >= cy && /^[1-3]$/.test(norm(o.text))).sort((a, b) => a.x - b.x);
         const awards = (S.awards ||= []);
         const prev = awards[awards.length - 1];
@@ -258,7 +267,7 @@ export function parseCells(input: Cell[]): StudentRecord {
         const sm = left[1] ? asSem(+norm(left[1].text)) : (prev && prev.year === yr ? prev.sem : null);
         awards.push({
           year: yr, sem: sm,
-          name: joinLines(c.lines).replace(/\(\s*/g, '(').replace(/\s*\)/g, ')'),
+          name: join(c.lines).replace(/\(\s*/g, '(').replace(/\s*\)/g, ')'),
           grade: at(awCols.grade), date: at(awCols.date),
           org: at(awCols.org).replace(/[가-힣]+(고등학교)(장)?/g, '○○$1$2'),
           target: at(awCols.target),
@@ -275,7 +284,7 @@ export function parseCells(input: Cell[]): StudentRecord {
         const reading = (S.reading ||= []);
         const prev = reading[reading.length - 1];
         const yv = (yc && /^[1-3]$/.test(norm(yc.text)) ? asYear(+norm(yc.text)) : null) ?? (prev ? prev.year : 1);
-        reading.push({ year: yv, area: ac ? norm(ac.text) : '', text: joinLines(c.lines) });
+        reading.push({ year: yv, area: ac ? norm(ac.text) : '', text: join(c.lines) });
       }
       continue;
     }
@@ -302,8 +311,8 @@ export function parseCells(input: Cell[]): StudentRecord {
         const ys = pick(ccCols.year);
         const last = S.changche[S.changche.length - 1];
         const yr: Year = (ys && /^[1-3]$/.test(ys) ? asYear(+ys) : null) ?? (last ? last.year : year);
-        if (last && last.year === yr && last.area === area) last.text = joinLines([last.text, ...c.lines]);
-        else S.changche.push({ year: yr, area, hours: +hour || null, text: joinLines(c.lines) });
+        if (last && last.year === yr && last.area === area) last.text = join([last.text, ...c.lines]);
+        else S.changche.push({ year: yr, area, hours: +hour || null, text: join(c.lines) });
         continue;
       }
       if (/^희망분야$/.test(nos(t))) {
@@ -328,6 +337,15 @@ export function parseCells(input: Cell[]): StudentRecord {
           const k = nos(o.text);
           for (const [key, re] of HEAD) {
             if (re.test(k) && !cols[key]) { cols[key] = { x: o.x, w: o.w }; break; }
+          }
+        }
+        // 머리글 글자가 옆 칸까지 넘쳐 '학점수원점수/과목평균'처럼 한 칸에 찍히는 출력본이 있다.
+        // 이때 그 칸은 학점, 바로 오른쪽 빈 칸은 원점수 열로 본다.
+        if (cols.raw && !cols.credit) {
+          const merged = row.find(o => Math.abs(o.x - cols.raw!.x) < 0.5);
+          if (merged && /^(학점수?|단위수?)/.test(nos(merged.text))) {
+            const right = row.filter(o => o.x > merged.x + merged.w - 1 && !nos(o.text)).sort((a, b) => a.x - b.x)[0];
+            if (right) { cols.credit = { x: merged.x, w: merged.w }; cols.raw = { x: right.x, w: right.w }; }
           }
         }
         gradeCols = { cols, top: c.y, page: c.page };
@@ -387,13 +405,15 @@ export function parseCells(input: Cell[]): StudentRecord {
         const cy = c.y + c.h / 2;
         const yc = onPage(c.page).find(o => o.x < c.x && o.y <= cy && o.y + o.h >= cy);
         const yv = yc && /^[1-3]$/.test(norm(yc.text)) ? asYear(+norm(yc.text)) : null;
-        if (yv && (!lastBeh || lastBeh.year !== yv)) { lastBeh = { year: yv, text: joinLines(c.lines) }; S.behavior.push(lastBeh); }
-        else if (lastBeh) lastBeh.text = joinLines([lastBeh.text, ...c.lines]);
+        if (yv && (!lastBeh || lastBeh.year !== yv)) { lastBeh = { year: yv, text: join(c.lines) }; S.behavior.push(lastBeh); }
+        else if (lastBeh) lastBeh.text = join([lastBeh.text, ...c.lines]);
       }
       continue;
     }
   }
 
+  // 동아리 이름: NEIS는 특기사항 칸 첫머리에 '(동아리명)(34시간)'을 적는다. 영역 이름으로 옮기고, 한 칸에 동아리가 여럿이면 나눈다.
+  S.changche = splitClubs(S.changche);
   // 학기 보정: 같은 학년에서 학기 값이 비어 있으면 앞 줄 값을 상속(없으면 1)
   let ps: Sem | null = null, py: Year | null = null;
   for (const c of S.courses) {
@@ -401,7 +421,7 @@ export function parseCells(input: Cell[]): StudentRecord {
     if (c.sem) ps = c.sem; else c.sem = ps || 1;
   }
   // 세특 분리
-  const sp = splitSeteuk(pending, known);
+  const sp = splitSeteuk(pending, known, lex);
   S.seteuk = sp.seteuk;
   S.warnings.push(...sp.warnings);
   for (const c of S.courses) {
@@ -418,6 +438,26 @@ export function parseCells(input: Cell[]): StudentRecord {
   if (!S.courses.length) S.warnings.push('교과 성적표를 찾지 못했습니다. NEIS에서 출력한 학교생활기록부 PDF인지 확인해 주세요.');
   if (!hakjeok.length) delete S.hakjeok;
   return S;
+}
+
+/** 동아리 특기사항 첫머리의 '(동아리명)(N시간)'을 영역 이름으로 옮긴다. 한 칸에 여러 동아리가 이어 적혀 있으면 나눈다. */
+export function splitClubs(list: Changche[]): Changche[] {
+  const CLUB = /\(([^()]{1,30})\)\s*\((\d{1,3})\s*시간\)\s*/g;
+  const out: Changche[] = [];
+  for (const c of list) {
+    if (!/동아리/.test(c.area)) { out.push(c); continue; }
+    const marks = [...c.text.matchAll(CLUB)].filter(m => m.index === 0 || /[.。]\s*$/.test(c.text.slice(0, m.index)));
+    if (!marks.length) { out.push(c); continue; }
+    const base = c.area.replace(/\(.*$/, '').trim() || '동아리활동';
+    const head = c.text.slice(0, marks[0].index).trim();
+    if (head) out.push({ ...c, text: head });
+    marks.forEach((m, i) => {
+      const end = i + 1 < marks.length ? marks[i + 1].index! : c.text.length;
+      const text = c.text.slice(m.index! + m[0].length, end).trim();
+      if (text) out.push({ year: c.year, area: `${base}(${m[1].trim()})`, hours: +m[2] || c.hours, text });
+    });
+  }
+  return out;
 }
 
 /** 쪽 목록 → StudentRecord */

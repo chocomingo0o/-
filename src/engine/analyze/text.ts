@@ -12,7 +12,7 @@
  *
  * 이 파일은 DOM에 의존하지 않는다. 사전은 dict/stop.ts, dict/patterns.ts를 쓴다.
  */
-import { GENERIC, LEAD_WORD, NOUN_OK, STOP, STOP2, SUF, VERB_END } from '../dict/stop';
+import { GENERIC, LEAD_WORD, NOUN_OK, STOP, STOP2, SUF, SYNONYM, VERB_END } from '../dict/stop';
 import { EVAL_TAIL, LEAD_ADVERBS } from '../dict/patterns';
 
 /** 공백(띄어쓰기, 줄바꿈 포함)을 모두 뺀다. */
@@ -164,6 +164,7 @@ export function tokens(text: string, extraStop?: Set<string>): string[] {
     let t = w.replace(LEAD_WORD, '');
     if (isStop(t, extraStop) || LEAD_ALONE.test(t)) continue;
     t = stripSuffix(t);
+    t = SYNONYM[t] ?? t;
     if (t.length < 2 || t.length > 12) continue;
     if (/^[0-9]/.test(t)) continue;
     if (isStop(t, extraStop)) continue;

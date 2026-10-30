@@ -86,6 +86,17 @@ describe('tokens', () => {
   });
 });
 
+describe('tokens: 같은 뜻의 다른 표기(SYNONYM)는 한 낱말로 모은다', () => {
+  it('AI → 인공지능, 카탈라아제 → 카탈레이스, 뇌공학과 신경과학 → 뇌과학', () => {
+    const out = tokens('AI 윤리와 카탈라아제 활성, 뇌공학 연구를 신경과학 관점에서 살핌.');
+    expect(out).toContain('인공지능');
+    expect(out).toContain('카탈레이스');
+    expect(out.filter(t => t === '뇌과학')).toHaveLength(2);
+    expect(out).not.toContain('AI');
+    expect(out).not.toContain('카탈라아제');
+  });
+});
+
 describe('summarize', () => {
   it('앞머리 접속어와 끝의 평가 꼬리, 마침표를 뗀다', () => {
     expect(summarize('또한 실험 결과를 꼼꼼히 기록하는 태도가 돋보임.')).toBe('실험 결과를 꼼꼼히 기록');

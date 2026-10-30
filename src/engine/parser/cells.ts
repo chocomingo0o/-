@@ -6,8 +6,9 @@
  *
  * 규칙(참고 앱의 파서와 같다):
  *  - cellText: y 차이가 2.6 이내인 글자는 같은 줄. 줄은 위에서 아래(y 내림차순), 줄 안은 왼쪽부터(x 오름차순).
- *  - joinLines: 줄 끝이 조사·어미·문장부호(SPACE_END)면 띄어서 잇고, 다음 줄이 문장부호로 시작(NOSPACE_START)하면
- *    붙여 잇는다. 그 밖에는 붙인다(한글 낱말이 줄 끝에서 끊긴 경우가 대부분이라서).
+ *  - joinLines: NEIS는 글자 단위로 줄을 바꾸고, 줄이 바뀌는 자리의 띄어쓰기를 지운다(실제 출력본에서 줄 앞뒤 공백 0건).
+ *    그래서 줄 경계마다 띄어 쓸지 붙일지를 추정한다. 같은 문서 안에서 줄 가운데 온전히 쓰인 낱말 목록
+ *    (buildJoinLexicon)이 있으면 그것을 먼저 근거로 쓰고, 없으면 조사와 어미 규칙만 쓴다. 판단 순서는 decideJoin 주석 참고.
  *  - buildCells: 가로·세로 3 넘는 사각형만 셀 후보. 다른 사각형을 2개 이상 품는 바깥 사각형은 뺀다.
  *    글자는 자기를 품는 가장 작은 셀에 넣는다(판정 y는 글자 y+2). 머리글·쪽수 영역(y<26, 또는 y<64이고 h<22)은 뺀다.
  *  - 격자 fallback(gridCellsFromLines): 표를 사각형이 아니라 선으로만 그린 PDF에서는 셀이 거의 안 나온다.
@@ -21,10 +22,122 @@ export const norm = (s: string | null | undefined): string => (s || '').replace(
 /** 공백 제거 */
 export const nos = (s: string | null | undefined): string => (s || '').replace(/\s+/g, '');
 
-/** 줄 끝이 이 글자면 다음 줄과 띄어서 잇는다(조사·어미·문장부호) */
+/** (옛 규칙, 호환용) 줄 끝이 이 글자면 다음 줄과 띄어서 잇는다(조사·어미·문장부호) */
 export const SPACE_END = /[을를은는에며함음임됨여의와과로고게서도.,)』」’”·;:]$/;
 /** 다음 줄이 이 글자로 시작하면 붙여 잇는다(문장부호) */
 export const NOSPACE_START = /^[.,)』」’”·;:%]/;
+
+/**
+ * 줄 경계 판단용 낱말 사전.
+ * whole: 줄 가운데에서 온전히 쓰인 낱말(앞뒤 문장부호를 뗀 꼴)과 횟수. 줄의 첫 낱말과 끝 낱말은 잘린 조각일 수 있어 넣지 않는다.
+ * inner: 그 낱말들을 공백으로 이은 문자열. 붙여 쓴 꼴('교과서')이 다른 곳에 있는지 찾을 때 쓴다.
+ */
+export interface JoinLexicon { whole: Map<string, number>; inner: string }
+
+const EDGE_PUNCT = /^[\s'"‘’“”『』「」()[\]{}<>〈〉《》.,;:!?·…~-]+|[\s'"‘’“”『』「」()[\]{}<>〈〉《》.,;:!?·…~-]+$/g;
+const clean = (w: string): string => w.replace(EDGE_PUNCT, '');
+
+/** 문서의 모든 줄에서 낱말 사전을 만든다 */
+export function buildJoinLexicon(lines: string[]): JoinLexicon {
+  const whole = new Map<string, number>();
+  const parts: string[] = [];
+  for (const ln of lines) {
+    const toks = ln.trim().split(/\s+/);
+    for (let i = 1; i < toks.length - 1; i++) {
+      const w = clean(toks[i]);
+      if (!w) continue;
+      whole.set(w, (whole.get(w) ?? 0) + 1);
+      parts.push(w);
+    }
+  }
+  return { whole, inner: ' ' + parts.join(' ') + ' ' };
+}
+
+/** 줄 첫 낱말이 이것뿐이면 앞 낱말에 붙는 조사나 어미 조각이다(예: '보고서|를', '보여|줌.', '겸손하|게'). '이', '등', '일'처럼 홀로 쓰이는 말은 뺐다. */
+const BOUND_TOKEN = new RegExp('^(?:' + [
+  '을', '를', '은', '는', '가', '의', '에', '에서', '에게', '에서의', '에서는', '에서도', '에는', '에도', '께', '께서',
+  '와', '과', '와의', '과의', '로', '으로', '로서', '으로서', '로써', '으로써', '로는', '으로는', '로도', '으로도',
+  '도', '만', '까지', '부터', '처럼', '보다', '이나', '나', '이며', '며', '이고', '고', '라', '이라', '라는', '이라는', '라고', '이라고', '란', '이란',
+  '하고', '하여', '하며', '하는', '하던', '한', '할', '함', '해', '해서', '했', '했고', '했으며', '했던', '했다', '했음', '한다',
+  '하였', '하였고', '하였으며', '하였음', '하였다', '하였던', '하게', '하지', '하기', '하면', '하면서', '함으로써', '함을', '함과',
+  '되어', '되는', '된', '됨', '될', '되었', '되었고', '되었으며', '되었음', '됐', '됨을',
+  '임', '임을', '음', '음을', '줌', '움', '게', '기', '지', '면', '면서', '서', '서는', '서도', '서의', '적', '적인', '적으로', '성', '화', '들', '들의', '들을', '들이', '씩',
+  '이다', '다', '요', '여', '으며', '이면서', '인', '던', '시켜', '시킴', '시키는', '시키고', '시킬', '시킨', '시키며',
+  '다는', '다고', '한다는', '한다고', '화하여', '화하는', '화한', '화하고', '화된', '화되는', '화되어', '써',
+].join('|') + ')$');
+
+/** 띄어쓰기 앞에 오는 꼴(어절 끝): 이 꼴로 끝나는 두 글자 이상 낱말 뒤는 띄운다. '서', '도'처럼 낱말 안에도 흔한 글자는 넣지 않았다. */
+const WORD_END = /(?:함|음|임|됨|줌|움|며|하고|되고|이고|않고|있고|없고|하여|하며|해서|에서|면서|으며|지만|는데|어서|아서|여서|하게|하면|으면|다면|라면|적인|적으로|하는|되는|하던|있는|없는|않은|같은|다른|많은|높은|낮은|새로운|위한|대한|관한|통한|따른|의한|대해|위해|통해|따라|동안|함께|또한|특히|을|를|은|는|이|가|의|에|와|과|으로|에게|까지|부터|처럼|보다|던|으나|이나|었으나|였으나|지만|에서도|에도|로도|까지도|도록|하기도|되기도|[가-힣]{2}고)$/;
+/** 세 글자 이상 낱말이 '로'(주제로, 스스로), '적'(공학적, 자발적), 연결형 '해'(활용해, 비유해)로 끝나면 어절 끝으로 본다. '분해, 이해'처럼 '해'로 끝나는 명사는 뺀다. */
+const LONG_WORD_END = /[가-힣]{2}(?:로|적)$|[가-힣]{2}해$/;
+const HAE_NOUN = /(?:분해|용해|융해|이해|피해|방해|오해|견해|손해|화해|재해|공해|폐해|난해|저해|가해|조해)$/;
+/** 홀로 쓰이는 관형사와 수사: 이 낱말 자체로 끝나면 띄운다 */
+const DETERMINER = /^(?:두|세|네|한|여러|모든|각|각각|같은|이런|그런|저런|어떤|첫|새|온갖|다섯|여섯|일곱|여덟|아홉|열|스무|몇|및|또|더|잘|약|총|매|후)$/;
+/** 마지막 글자가 받침 ㄴ, ㄹ로 끝나는 두 글자 이상 낱말(관형형 '나눈, 적신, 할' 또는 '시간, 기술' 같은 온전한 명사)은 대개 어절 끝이다 */
+function endsWithNL(w: string): boolean {
+  const c = w.charCodeAt(w.length - 1) - 0xac00;
+  if (c < 0 || c > 11171) return false;
+  const jong = c % 28;
+  return jong === 4 || jong === 8;
+}
+/** 숫자와 단위로 끝나는 말('1학기', '3회') 뒤는 띄운다 */
+const NUM_UNIT_END = /\d(?:학기|학년|회|명|개|번|가지|권|차|시간|주|일|년|월|%|쪽|곳)$/;
+const PUNCT_END = /[.,;:)\]』」’”…!?]$/;
+/** '이'는 관형사('이 실험')이기도 하고 명사 뒤 조사('과정이')이기도 하다. 앞 낱말이 연결 어미로 끝나면 관형사로 본다. */
+const CONNECTIVE_END = /(?:며|고|서|여|어|아|면|는데|지만|나|해|도록|게)$/;
+/** 다음 줄 첫 낱말이 홀로 쓰이는 의존 명사나 접속 부사면('수업|후', '수업|중', '실험|등', '실험|및') 두 글자 이상 낱말 뒤에서 띄운다. 한 글자 뒤는 '이후, 집중'처럼 한 낱말이기 쉬워 붙인다. */
+const STANDALONE_B = /^(?:후|중|등|및)[,.]?$/;
+
+/**
+ * 줄 경계에서 띄울지(true) 붙일지(false) 정한다.
+ * a = 앞 줄의 끝 낱말, b = 다음 줄의 첫 낱말.
+ *  0) 날짜('2024.|03.28.')와 동아리 시간('…탐구부)|(34시간)')은 붙이고, 기간 표시 '-', '~' 앞뒤는 띄운다
+ *  1) 다음 줄이 문장부호로 시작 → 붙임
+ *  2) b가 조사나 어미 조각(BOUND_TOKEN), 또는 연결 어미로 끝나지 않는 낱말 뒤의 '이' → 붙임
+ *     b가 홀로 쓰이는 '후, 중, 등, 및'이고 a가 두 글자 이상 → 띄움
+ *  3) a가 문장부호로 끝남 → 띄움
+ *  4) 사전의 어떤 낱말 안에 a+(b의 첫 글자)가 들어 있음 → 붙임(예: '교과|서에' ← 문서의 '교과서')
+ *  5) 사전에 a와 b가 모두 온전한 낱말로 있음, 또는 b만 있고 붙인 꼴은 없음 → 띄움(예: '뛰어난|이해력을')
+ *  6) 영어 소문자 뒤에 대문자로 시작하는 낱말 → 띄움('The|Brain')
+ *  7) a가 홀로 쓰이는 관형사나 수사(두, 여러, 모든…), 숫자+단위, 어절 끝 꼴(WORD_END, LONG_WORD_END),
+ *     받침 ㄴ, ㄹ로 끝나는 두 글자 이상 낱말 → 띄움
+ *  8) 그 밖 → 붙임(낱말 가운데에서 끊긴 경우)
+ */
+export function decideJoin(prevLine: string, nextLine: string, lex?: JoinLexicon): boolean {
+  const next = nextLine.trimStart();
+  const aRaw = prevLine.trimEnd().split(/\s+/).pop() ?? '';
+  const bRaw = next.split(/\s+/)[0] ?? '';
+  if (/\d\.$/.test(aRaw) && /^\d/.test(bRaw)) return false;
+  if (/^\(\d{1,3}\s*시간\)/.test(next)) return false;
+  if (/^[-~]$/.test(aRaw) || /^[-~]$/.test(bRaw)) return true;
+  if (NOSPACE_START.test(next)) return false;
+  const a = clean(aRaw);
+  const b = clean(bRaw);
+  // '한'은 '~한'의 조각이기도 하고 '한 번, 한 달'의 관형사이기도 하다. 뒤에 세는 말이 오면 관형사로 본다.
+  const second = next.split(/\s+/)[1] ?? '';
+  const isCounted = b === '한' && /^(?:번|달|명|가지|권|개|사람|학기|해|차례|걸음|편|단계|시간|주|번째|곳|문장|쪽)/.test(second);
+  if (b && BOUND_TOKEN.test(b) && !isCounted) return false;
+  if (b === '이' && bRaw === '이' && a && !PUNCT_END.test(aRaw) && !CONNECTIVE_END.test(a)) return false;
+  if (STANDALONE_B.test(bRaw) && a.length >= 2) return true;
+  if (PUNCT_END.test(aRaw)) return true;
+  if (!a || !b) return false;
+  if (lex) {
+    const aWhole = lex.whole.get(a) ?? 0;
+    const bWhole = lex.whole.get(b) ?? 0;
+    // 4) 앞 조각에 다음 줄 첫 글자를 붙인 꼴이 다른 낱말 안에 있으면 한 낱말이 잘린 것(예: '지수함|수나' ← '지수함수')
+    const joinedHit = lex.inner.includes(a + b[0]);
+    if (joinedHit && !(aWhole >= 2 && bWhole >= 1)) return false;
+    // 5) 앞뒤가 모두 다른 곳에서 온전한 낱말로 쓰였으면 띄운다
+    if (aWhole >= 1 && (bWhole >= 1 || (b.length >= 2 && lex.inner.includes(' ' + b.slice(0, 2))))) return true;
+    if (bWhole >= 1 && a.length >= 2 && !joinedHit) return true;
+  }
+  if (/[a-z]$/.test(a) && /^[A-Z]/.test(b)) return true;
+  if (DETERMINER.test(a)) return true;
+  if (NUM_UNIT_END.test(a)) return true;
+  if (a.length >= 2 && (WORD_END.test(a) || endsWithNL(a))) return true;
+  if (LONG_WORD_END.test(a) && !HAE_NOUN.test(a)) return true;
+  return false;
+}
 
 /** 같은 줄로 볼 y 차이 */
 const LINE_TOL = 2.6;
@@ -47,14 +160,15 @@ export function cellText(items: TextItem[]): string[] {
     .filter(Boolean);
 }
 
-/** 줄 배열 → 한 문자열 */
-export function joinLines(lines: string[]): string {
+/** 줄 배열 → 한 문자열. lex(같은 문서의 낱말 사전)가 있으면 줄 경계 판단이 더 정확해진다. */
+export function joinLines(lines: string[], lex?: JoinLexicon): string {
   let out = '';
-  for (const ln of lines) {
-    if (!out) { out = ln; continue; }
-    if (/\s$/.test(out) || NOSPACE_START.test(ln)) out += ln;
-    else if (SPACE_END.test(out)) out += ' ' + ln;
-    else out += ln;
+  for (const raw of lines) {
+    const ln = raw.replace(/\s+/g, ' ');
+    if (!ln.trim()) continue;
+    if (!out) { out = ln.trim(); continue; }
+    if (/\s$/.test(out) || /^\s/.test(ln)) { out = out.trimEnd() + ' ' + ln.trim(); continue; }
+    out += (decideJoin(out, ln, lex) ? ' ' : '') + ln.trim();
   }
   return out.replace(/\s+/g, ' ').trim();
 }
