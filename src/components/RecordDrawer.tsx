@@ -20,12 +20,18 @@ export function RecordDrawer({ an, student, id }: { an: Analysis; student: Stude
   const segs = useMemo(() => (r ? highlightSegments(r, an, state.userDict) : []), [r, an, state.userDict]);
   const body = useMemo(() => (r ? renderText(r.text, segs, r.key) : null), [r, segs]);
 
-  // 창 안의 다른 기록 버튼으로 옮겨 왔을 때만 맨 위로 되돌린다
+  // 창 안의 다른 기록 버튼으로 옮겨 왔을 때만 맨 위로 되돌린다.
+  // 폰 너비에서는 옆 창 본문이 스크롤되고, 넓은 화면에서는 페이지 전체가 스크롤되므로 둘 다 다룬다.
   useEffect(() => {
-    if (jumpRef.current) {
-      jumpRef.current = false;
-      rootRef.current?.scrollIntoView({ block: 'start' });
+    if (!jumpRef.current) return;
+    jumpRef.current = false;
+    let el: HTMLElement | null = rootRef.current?.parentElement ?? null;
+    while (el) {
+      const oy = getComputedStyle(el).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) { el.scrollTop = 0; return; }
+      el = el.parentElement;
     }
+    window.scrollTo({ top: 0 });
   }, [id]);
 
   if (!r) return <Empty>기록을 찾지 못했습니다. 다른 카드를 눌러 보세요.</Empty>;

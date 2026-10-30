@@ -11,7 +11,7 @@ interface Props {
   defaultWidth?: number;
 }
 
-/** 오른쪽 옆 창. 왼쪽 가장자리를 끌어 너비를 바꿀 수 있다. */
+/** 오른쪽 옆 창. 왼쪽 가장자리를 끌어 너비를 바꿀 수 있다. 폰 너비(md 미만)에서는 화면 위에 떠서 가로를 가득 채운다. */
 export function SideDrawer({ open, kicker, title, onClose, children, defaultWidth = 480 }: Props) {
   const [w, setW] = useState<number>(defaultWidth);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -29,8 +29,8 @@ export function SideDrawer({ open, kicker, title, onClose, children, defaultWidt
   };
   return (
     <aside
-      className={cn('noprint fixed inset-y-0 right-0 z-50 flex flex-col border-l border-hair bg-surface shadow-[0_0_0_1px_var(--ring)] md:static md:z-auto md:shrink-0 md:shadow-none')}
-      style={{ width: Math.min(w, typeof window !== 'undefined' ? window.innerWidth : w) }}
+      className={cn('noprint fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-hair bg-surface shadow-[0_0_0_1px_var(--ring)] md:static md:z-auto md:w-[var(--dw)] md:shrink-0 md:shadow-none')}
+      style={{ '--dw': `${Math.min(w, typeof window !== 'undefined' ? window.innerWidth : w)}px` } as React.CSSProperties}
       aria-label={title || '옆 창'}
     >
       <div

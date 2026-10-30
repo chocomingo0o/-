@@ -168,7 +168,7 @@ function Shell() {
   const selRec = state.sel ? an.recs.find((r) => r.id === state.sel) : null;
   const sideTitle: Record<string, { kicker: string; title: string; width?: number }> = {
     rec: { kicker: selRec ? `${selRec.kind} · ${selRec.lane} · ${semLabel(selRec)}` : '', title: selRec?.subj || '' },
-    mlist: { kicker: '근거 문장', title: '탐구 방법', width: Math.min(620, Math.round(window.innerWidth * 0.42)) },
+    mlist: { kicker: '근거 문장', title: '탐구 방법', width: Math.max(360, Math.min(620, Math.round(window.innerWidth * 0.42))) },
     dict: { kicker: student.data.meta.name || '', title: '표현 사전' },
     note: { kicker: student.data.meta.name || '', title: '상담 노트' },
     manual: { kicker: '붙여 넣기', title: '세특 직접 입력', width: 620 },

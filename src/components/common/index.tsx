@@ -35,10 +35,13 @@ export function GradeChips({ grades, className }: { grades: GradeChipT[]; classN
 export const KIND_LABEL: Record<LinkKind, string> = { 심화: '심화', 확장: '확장', 전환: '전환', 반복: '반복', 동시: '같은 시기' };
 export const KIND_VAR: Record<LinkKind, string> = { 심화: 'var(--link-deep)', 확장: 'var(--link-cross)', 전환: 'var(--link-shift)', 반복: 'var(--link-rep)', 동시: 'var(--link-con)' };
 
-/** 연결 종류 칩 */
+/**
+ * 연결 종류 칩. 글자색은 토큰으로 둔다: 어두운 모드에서는 심화 바탕(--black)이 밝아지므로 흰 글자를 고정하면 보이지 않는다.
+ * 같은 시기(회색 바탕)는 밝은 모드·어두운 모드 모두 본문색(text-ink)이 더 잘 읽힌다.
+ */
 export function KindChip({ kind, className }: { kind: LinkKind; className?: string }) {
   return (
-    <span className={cn('inline-flex items-center rounded px-1.5 py-[1px] text-[11.5px] font-bold leading-[1.5] text-white', className)} style={{ background: KIND_VAR[kind] }}>
+    <span className={cn('inline-flex items-center rounded px-1.5 py-[1px] text-[11.5px] font-bold leading-[1.5]', kind === '동시' ? 'text-ink' : 'text-surface', className)} style={{ background: KIND_VAR[kind] }}>
       {KIND_LABEL[kind]}
     </span>
   );
@@ -66,7 +69,7 @@ export function SectionTitle({ children, sub, className }: { children: React.Rea
 export function Toast({ text }: { text: string | null }) {
   if (!text) return null;
   return (
-    <div role="status" className="noprint fixed bottom-5 left-1/2 z-[60] -translate-x-1/2 rounded-md bg-ink px-4 py-2 text-[13.5px] text-surface shadow-lg">
+    <div role="status" className="noprint fixed bottom-5 left-1/2 z-[60] -translate-x-1/2 rounded-md bg-ink px-4 py-2 text-[13.5px] text-surface shadow-[0_2px_8px_var(--ring)]">
       {text}
     </div>
   );
@@ -76,7 +79,7 @@ export function Busy({ text }: { text: string | null }) {
   if (!text) return null;
   return (
     <div className="noprint fixed inset-0 z-[70] flex items-center justify-center bg-black/20">
-      <div className="flex items-center gap-3 rounded-lg border border-hair bg-surface px-5 py-4 text-[14px] shadow-lg">
+      <div className="flex items-center gap-3 rounded-lg border border-hair bg-surface px-5 py-4 text-[14px] shadow-[0_2px_8px_var(--ring)]">
         <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-hair-2 border-t-ink" aria-hidden />
         <span>{text}</span>
       </div>
