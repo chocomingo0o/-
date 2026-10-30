@@ -12,16 +12,17 @@
   --plane: #f5f5f4;        /* 페이지 바탕 */
   --ink: #1a1a1a;          /* 본문 */
   --ink-2: #4d4d4d;        /* 보조 */
-  --muted: #8a8a8a;        /* 설명·축 */
+  --muted: #6b6b6b;        /* 설명·축(흰 바탕 5.3:1, 페이지 바탕 4.9:1) */
   --hair: #e6e6e6;         /* 구분선 */
   --hair-2: #cfcfcf;       /* 테두리 */
   --black: #111111;        /* 기본 버튼·강조 */
   --ring: rgba(0, 0, 0, 0.10);
+  --scrim: rgba(0, 0, 0, 0.20); /* 옆 창·대기 덮개 뒤를 어둡게 */
 
   /* 메모지 색(채움)과 그 진한 변형(선·글자) */
   --note-lavender: #d9bdff; --note-lavender-ink: #7a55d6;
-  --note-yellow:   #f9d96b; --note-yellow-ink:   #c48f0a;
-  --note-mint:     #a9e5bb; --note-mint-ink:     #2f8f57;
+  --note-yellow:   #f9d96b; --note-yellow-ink:   #8a6200; /* 흰 글자·흰 바탕 모두 5.5:1 */
+  --note-mint:     #a9e5bb; --note-mint-ink:     #257a48; /* 5.3:1 */
 
   /* 연결 종류 (라벨 칩을 항상 함께 표시한다) */
   --link-deep: var(--black);              /* 심화 */
@@ -43,7 +44,7 @@
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --surface: #1c1c1c; --plane: #111111; --ink: #f2f2f2; --ink-2: #c9c9c9; --muted: #8f8f8f;
-    --hair: #2e2e2e; --hair-2: #3d3d3d; --black: #f2f2f2; --ring: rgba(255, 255, 255, 0.12);
+    --hair: #2e2e2e; --hair-2: #3d3d3d; --black: #f2f2f2; --ring: rgba(255, 255, 255, 0.12); --scrim: rgba(0, 0, 0, 0.50);
     --note-lavender: #5b45a8; --note-lavender-ink: #9579f2;
     --note-yellow: #8a6a10;   --note-yellow-ink: #d7a52a;
     --note-mint: #2a6b45;     --note-mint-ink: #3faa6b;
@@ -56,7 +57,7 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
   --surface: #1c1c1c; --plane: #111111; --ink: #f2f2f2; --ink-2: #c9c9c9; --muted: #8f8f8f;
-  --hair: #2e2e2e; --hair-2: #3d3d3d; --black: #f2f2f2; --ring: rgba(255, 255, 255, 0.12);
+  --hair: #2e2e2e; --hair-2: #3d3d3d; --black: #f2f2f2; --ring: rgba(255, 255, 255, 0.12); --scrim: rgba(0, 0, 0, 0.50);
   --note-lavender: #5b45a8; --note-lavender-ink: #9579f2;
   --note-yellow: #8a6a10;   --note-yellow-ink: #d7a52a;
   --note-mint: #2a6b45;     --note-mint-ink: #3faa6b;
@@ -77,6 +78,7 @@
   --color-hair: var(--hair);
   --color-hair-2: var(--hair-2);
   --color-black: var(--black);
+  --color-scrim: var(--scrim);
   --color-note-lavender: var(--note-lavender);
   --color-note-lavender-ink: var(--note-lavender-ink);
   --color-note-yellow: var(--note-yellow);
@@ -123,9 +125,10 @@
   .panel { background: var(--surface); border: 1px solid var(--hair); border-radius: var(--radius-card); }
   .hairline { border-color: var(--hair); }
   /* 형광펜 */
+  /* 형광펜 세 종류는 색 외에 밑줄 모양으로도 구분한다: 방법 표현 없음, 관심 주제 점선, 과학 탐구 기능 실선 */
   mark.m { background: var(--mark-method); color: var(--mark-method-ink); padding: 0 2px; border-radius: 2px; }
-  mark.t { background: var(--mark-theme); color: var(--mark-theme-ink); padding: 0 2px; border-radius: 2px; }
-  mark.k { background: var(--mark-skill); color: var(--mark-skill-ink); padding: 0 2px; border-radius: 2px; }
+  mark.t { background: var(--mark-theme); color: var(--mark-theme-ink); padding: 0 2px; border-radius: 2px; text-decoration: underline dotted; text-underline-offset: 2px; }
+  mark.k { background: var(--mark-skill); color: var(--mark-skill-ink); padding: 0 2px; border-radius: 2px; text-decoration: underline solid; text-underline-offset: 2px; }
   .keysent { border-bottom: 1.5px dashed var(--ink-2); }
 }
 

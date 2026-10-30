@@ -29,11 +29,12 @@ export async function ingestFiles(files: File[], onBusy?: (text: string) => void
     if (/\.json$/i.test(f.name)) {
       const parsed = parseJsonFile(await f.text());
       if (parsed.kind === 'work') {
+        // id는 늘 새로 발급한다. 같은 파일을 두 번 올리거나 다른 파일에 같은 id가 있어도 학생이 섞이지 않게.
         for (const s of parsed.file.students) {
-          out.entries.push({ id: s.id || uid(), file: s.file, data: s.data, memo: s.memo || '', recMemo: s.recMemo || {} });
+          out.entries.push({ id: uid(), file: s.file, data: s.data, memo: s.memo || '', recMemo: s.recMemo || {} });
         }
         if (parsed.file.userDict) out.dicts.push(parsed.file.userDict);
-        out.notes.push(`${f.name}에서 ${parsed.file.students.length}명의 작업을 불러왔습니다.`);
+        out.notes.push(`${f.name}에서 학생 ${parsed.file.students.length}명의 작업을 불러왔습니다.`);
       } else if (parsed.kind === 'dict') {
         out.dicts.push(parsed.dict);
         out.notes.push('표현 사전을 가져왔습니다.');

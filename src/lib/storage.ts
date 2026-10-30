@@ -1,6 +1,6 @@
 /**
  * 브라우저 저장: 교사가 추가한 표현 사전(localStorage)과 작업 파일(.json) 내보내기/불러오기.
- * 학생 정보는 localStorage에 저장하지 않습니다(표현 사전 낱말만 저장).
+ * 학생 정보는 localStorage에 저장하지 않습니다(표현 사전 낱말과 밝게/어둡게 설정만 저장).
  */
 import type { StudentEntry, UserDict, WorkFile } from '../engine/types';
 
@@ -70,9 +70,9 @@ export function parseJsonFile(text: string): LoadedFile {
     const j = JSON.parse(text);
     if (j && j.app === 'tamgu-map' && Array.isArray(j.students)) return { kind: 'work', file: j as WorkFile };
     if (j && j.app === 'tamgu-map-dict' && j.dict) return { kind: 'dict', dict: j.dict as UserDict };
-    // 참고 앱(모두의 탐구의 맥)의 표현 사전 파일도 받아 줍니다(방법 이름이 같으면 라벨→키로 바꿔야 하므로 UI에서 처리).
-    if (j && (j.app === 'inquiry-dict' || j.app === 'inquiry-tree')) return { kind: 'error', message: '다른 앱의 파일입니다. 이 도구의 작업 파일(.json)만 불러올 수 있습니다.' };
-    return { kind: 'error', message: '이 도구의 작업 파일이 아닙니다.' };
+    // 참고 앱(모두의 탐구의 맥)의 파일은 받지 않는다(방법 라벨→키 변환이 없다). 어떤 파일인지 알려 주기만 한다.
+    if (j && (j.app === 'inquiry-dict' || j.app === 'inquiry-tree')) return { kind: 'error', message: '다른 앱의 파일입니다. 이 도구의 작업 파일이나 표현 사전 파일(.json)만 불러올 수 있습니다.' };
+    return { kind: 'error', message: '이 도구의 작업 파일이나 표현 사전 파일이 아닙니다.' };
   } catch {
     return { kind: 'error', message: 'JSON 파일을 읽지 못했습니다.' };
   }

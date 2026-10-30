@@ -10,6 +10,8 @@ interface Props {
   view: View;
   side: Side;
   blind: boolean;
+  /** 지금 어두운 모드인지(테마 버튼 라벨에 상태를 담기 위해) */
+  dark: boolean;
   onSelect: (i: number) => void;
   onView: (v: View) => void;
   onAddFiles: () => void;
@@ -50,12 +52,12 @@ export function TopBar(p: Props) {
             ))}
           </select>
         </label>
-        <nav className="flex items-center gap-1" role="tablist" aria-label="화면">
+        {/* 화면 전환은 탭 패턴(tabpanel·방향키)을 다 갖추지 않으므로 aria-current를 쓴 단순 버튼으로 둔다 */}
+        <nav className="flex items-center gap-1" aria-label="화면">
           {TABS.map((t) => (
             <button
               key={t.v}
-              role="tab"
-              aria-selected={p.view === t.v}
+              aria-current={p.view === t.v ? 'page' : undefined}
               className={cn('rounded-md px-3 py-1.5 text-[13.5px] font-semibold transition-colors', p.view === t.v ? 'bg-ink text-surface' : 'text-ink-2 hover:bg-plane')}
               onClick={() => p.onView(t.v)}
               type="button"
@@ -67,27 +69,28 @@ export function TopBar(p: Props) {
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <IconBtn label="PDF 더 올리기" onClick={p.onAddFiles}><FilePlus2 className="h-4 w-4" /></IconBtn>
           <IconBtn label="표현 사전" onClick={p.onDict} on={p.side === 'dict'}><BookOpen className="h-4 w-4" /></IconBtn>
-          <IconBtn label="상담 노트" onClick={p.onNotes} on={p.side === 'note'}><NotebookPen className="h-4 w-4" /></IconBtn>
+          <IconBtn label="상담 노트" onClick={p.onNotes} on={p.side === 'note'} disabled={p.view === 'note'} title={p.view === 'note' ? '상담 노트 화면을 보고 있습니다' : undefined}><NotebookPen className="h-4 w-4" /></IconBtn>
           <IconBtn label={p.blind ? '이름 보이기' : '이름 가리기'} onClick={p.onBlind}>{p.blind ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}</IconBtn>
           <IconBtn label="작업 저장" onClick={p.onSave}><Save className="h-4 w-4" /></IconBtn>
           <IconBtn label="인쇄" onClick={p.onPrint}><Printer className="h-4 w-4" /></IconBtn>
           <IconBtn label="모두 지우기" onClick={p.onWipe}><Trash2 className="h-4 w-4" /></IconBtn>
-          <IconBtn label="밝게/어둡게" onClick={p.onTheme} hideText><Contrast className="h-4 w-4" /></IconBtn>
+          <IconBtn label={p.dark ? '밝게 보기' : '어둡게 보기'} onClick={p.onTheme} hideText><Contrast className="h-4 w-4" /></IconBtn>
         </div>
       </div>
     </header>
   );
 }
 
-function IconBtn({ label, onClick, children, on, hideText }: { label: string; onClick: () => void; children: React.ReactNode; on?: boolean; hideText?: boolean }) {
+function IconBtn({ label, onClick, children, on, hideText, disabled, title }: { label: string; onClick: () => void; children: React.ReactNode; on?: boolean; hideText?: boolean; disabled?: boolean; title?: string }) {
   return (
     <button
       type="button"
       className={cn('btn ghost sm', on && 'border-ink bg-plane')}
       onClick={onClick}
-      title={label}
+      title={title ?? label}
       aria-label={label}
       aria-pressed={on}
+      disabled={disabled}
     >
       {children}
       {!hideText ? <span className="hidden lg:inline">{label}</span> : null}

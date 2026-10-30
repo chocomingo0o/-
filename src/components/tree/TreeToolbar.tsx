@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Maximize2, Minimize2, Minus, Plus } from 'lucide-react';
 import type { Analysis, Link, LinkKind } from '../../engine/types';
 import { DEPTH_TXT, LINK_KINDS } from '../../engine/analyze';
@@ -16,8 +16,9 @@ const WHY: { k: 'off' | 'brief' | 'full'; l: string }[] = [
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 1.6;
 
-/** 세그먼트 묶음(짧은 묶음용: 이유 표시, 확대·축소). 1px 틈(gap)이 구분선 구실을 한다. 줄을 바꾸지 않는다. */
-const group = 'inline-flex shrink-0 gap-px overflow-hidden rounded-md border border-hair-2 bg-hair-2';
+/** 세그먼트 묶음(짧은 묶음용: 이유 표시, 확대·축소). 1px 틈(gap)이 구분선 구실을 한다. 줄을 바꾸지 않는다.
+ *  overflow-hidden을 쓰지 않는다(안쪽 버튼의 포커스 외곽선이 잘린다). 모서리는 양 끝 버튼에 둥글림을 준다. */
+const group = 'inline-flex shrink-0 gap-px rounded-md border border-hair-2 bg-hair-2 [&>*:first-child]:rounded-l-[5px] [&>*:last-child]:rounded-r-[5px]';
 const seg = 'inline-flex items-center gap-1 bg-surface px-2.5 py-[5px] text-[13px] leading-[1.3] text-ink-2 hover:text-ink aria-pressed:bg-ink aria-pressed:text-surface disabled:opacity-40 focus-visible:z-10';
 /** 칩 묶음(연결 종류처럼 긴 묶음용). 폰 너비에서 줄을 바꿔도 빈 자리에 회색 바탕이 드러나지 않도록 칩마다 테두리를 둔다. */
 const chips = 'flex max-w-full flex-wrap gap-1';
@@ -41,7 +42,7 @@ export function TreeToolbar({ an, links, zoomPct, faintCount }: TreeToolbarProps
   const setZoom = (v: number | null) => dispatch({ type: 'setZoom', zoom: v === null ? null : Math.round(v * 100) / 100 });
 
   return (
-    <div className="noprint mb-3 flex flex-col gap-2">
+    <div className="noprint relative mb-3 flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {/* 연결 종류 */}
         <div role="group" aria-label="연결 종류" className={chips}>
@@ -79,7 +80,7 @@ export function TreeToolbar({ an, links, zoomPct, faintCount }: TreeToolbarProps
           <button type="button" className={cn(seg, 'px-2')} aria-label="축소" disabled={z <= ZOOM_MIN + 0.001} onClick={() => setZoom(Math.max(ZOOM_MIN, z - 0.1))}>
             <Minus size={14} aria-hidden />
           </button>
-          <button type="button" className={cn(seg, 'num min-w-[72px] justify-center')} aria-pressed={zoom === null} title="보드가 화면 너비에 맞도록 맞춥니다" onClick={() => setZoom(null)}>
+          <button type="button" className={cn(seg, 'num min-w-[72px] justify-center')} aria-pressed={zoom === null} title="계보도를 화면 너비에 맞춥니다" onClick={() => setZoom(null)}>
             {zoom === null ? `맞춤 ${zoomPct}%` : `${zoomPct}%`}
           </button>
           <button type="button" className={cn(seg, 'px-2')} aria-label="확대" disabled={z >= ZOOM_MAX - 0.001} onClick={() => setZoom(Math.min(ZOOM_MAX, z + 0.1))}>
@@ -89,7 +90,7 @@ export function TreeToolbar({ an, links, zoomPct, faintCount }: TreeToolbarProps
 
         <Legend />
 
-        <button type="button" className="btn ghost sm" aria-pressed={wide} onClick={() => dispatch({ type: 'toggleWide' })} title={wide ? 'Esc 키로도 돌아갑니다' : '상단 바와 머리글을 숨기고 보드만 크게 봅니다'}>
+        <button type="button" className="btn ghost sm" aria-pressed={wide} onClick={() => dispatch({ type: 'toggleWide' })} title={wide ? 'Esc 키로도 돌아갑니다' : '상단 바와 머리글을 숨기고 계보도만 크게 봅니다'}>
           {wide ? <Minimize2 size={14} aria-hidden /> : <Maximize2 size={14} aria-hidden />}
           {wide ? '넓게 보기 끝내기' : '넓게 보기'}
         </button>
@@ -113,7 +114,7 @@ export function TreeToolbar({ an, links, zoomPct, faintCount }: TreeToolbarProps
                 key={th.name}
                 type="button"
                 aria-pressed={theme === th.name}
-                title={`${th.name} · 낱말 ${th.words.join(', ')} · 기록 ${th.ids.length}개`}
+                title={`${th.name} · 낱말 ${th.words.join(', ')} · 기록 ${th.ids.length}건`}
                 onClick={() => dispatch({ type: 'setTheme', theme: theme === th.name ? null : th.name })}
                 className="inline-flex items-center gap-1.5 rounded-full border border-hair-2 px-2.5 py-[2px] text-ink-2 hover:border-ink aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-surface"
               >
@@ -131,12 +132,35 @@ export function TreeToolbar({ an, links, zoomPct, faintCount }: TreeToolbarProps
   );
 }
 
-/** 범례 팝업 */
+/**
+ * 범례 팝업. Esc와 바깥 클릭으로 닫힌다.
+ * 폰 너비에서는 버튼이 줄 중간에 있어도 넘치지 않도록 도구줄 전체 너비(도구줄이 relative)에 맞춰 놓고, md 이상에서는 버튼 오른쪽에 맞춘다.
+ */
 function Legend() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    // 캡처 단계에서 받아 App의 Esc 처리(옆 창 닫기)보다 먼저 범례만 닫는다
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setOpen(false);
+    };
+    const down = (e: PointerEvent) => {
+      if (ref.current && e.target instanceof Node && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('keydown', key, true);
+    document.addEventListener('pointerdown', down);
+    return () => {
+      document.removeEventListener('keydown', key, true);
+      document.removeEventListener('pointerdown', down);
+    };
+  }, [open]);
   return (
-    <details className="relative">
-      <summary className="btn ghost sm cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden">범례</summary>
-      <div className="panel absolute left-0 z-30 mt-1 w-[min(340px,calc(100vw-32px))] p-3 text-[13px] leading-snug shadow-[0_2px_8px_var(--ring)] md:left-auto md:right-0">
+    <details ref={ref} className="md:relative" open={open} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
+      <summary className="btn ghost sm cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden" aria-expanded={open}>범례</summary>
+      <div className="panel absolute left-0 right-0 z-[35] mt-1 p-3 text-[13px] leading-snug shadow-[0_2px_8px_var(--ring)] md:left-auto md:right-0 md:w-[340px]">
         <h4 className="mb-1.5 text-[13px] font-bold">연결 종류</h4>
         <ul className="flex flex-col gap-1.5">
           {KINDS.map((k) => (

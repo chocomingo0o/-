@@ -12,7 +12,8 @@ import { TreeToolbar } from './TreeToolbar';
 const LANE_W = 128;
 const COL_W = 232;
 const PRINT_W = 1040;
-const FIT_MIN = 0.6;
+/** 맞춤 배율 하한. 0.6이면 카드 글자가 8px 아래로 내려가 읽을 수 없으므로 0.85에서 멈추고, 넘치는 폭은 보드 안에서 가로로 넘긴다. */
+const FIT_MIN = 0.85;
 const FIT_MAX = 1;
 /** 격자 행: 1 학년, 2 학기, 3 진로 희망, 4부터 교과군 */
 const FIRST_LANE_ROW = 4;
@@ -23,13 +24,14 @@ interface Layout { years: Year[]; cols: SlotIndex[]; lanes: LaneRow[]; totalRows
 
 /**
  * 기록을 격자에 놓는다.
- * - 열: 기록이 있는 학년만(최소 1학년), 학년당 두 칸(1·2학기).
+ * - 열: 기록이 있는 학년만, 학년당 두 칸(1·2학기). 2·3학년 기록만 있으면 1학년 칸을 그리지 않는다. 기록이 하나도 없을 때만 1학년 칸을 둔다.
  * - 줄: 기록이 있는 교과군만, LANES 순서(창체 → 교과).
  * - 줄 안에서는 시간순으로 칸 점유 집합을 보며 비어 있는 첫 행에 놓는다. 학기 없는 기록은 두 칸을 차지한다.
  */
 function buildLayout(recs: Rec[]): Layout {
-  const ys = new Set<Year>([1]);
+  const ys = new Set<Year>();
   for (const r of recs) ys.add(r.year);
+  if (!ys.size) ys.add(1);
   const years = [...ys].sort((a, b) => a - b);
   const cols: SlotIndex[] = years.flatMap((y) => [((y - 1) * 2) as SlotIndex, ((y - 1) * 2 + 1) as SlotIndex]);
   const colOf = new Map<SlotIndex, number>(cols.map((s, i) => [s, i]));
@@ -92,7 +94,8 @@ export function TreeBoard({ an, student }: { an: Analysis; student: StudentEntry
   const [topPx, setTopPx] = useState(280);
 
   /* ── 자료 준비 ── */
-  const visibleRecs = useMemo(() => (showFaint ? an.recs : an.recs.filter((r) => !r.faint)), [an.recs, showFaint]);
+  // 약한 기록을 숨겨도 지금 선택한(상세 창에 열린) 기록은 보드에 남긴다. 그래야 선택이 보드에서 사라져 모든 카드가 흐려지는 일이 없다.
+  const visibleRecs = useMemo(() => (showFaint ? an.recs : an.recs.filter((r) => !r.faint || r.id === sel)), [an.recs, showFaint, sel]);
   const layout = useMemo(() => buildLayout(visibleRecs), [visibleRecs]);
   const recById = useMemo(() => new Map(an.recs.map((r) => [r.id, r])), [an.recs]);
   const faintCount = useMemo(() => an.recs.filter((r) => r.faint).length, [an.recs]);
@@ -114,7 +117,16 @@ export function TreeBoard({ an, student }: { an: Analysis; student: StudentEntry
   }, [links]);
 
   /* ── 강조(계보, 관심 주제) ── */
-  const lin = useMemo(() => (sel && recById.has(sel) ? lineage(an.links, sel) : null), [an.links, sel, recById]);
+  // 계보는 화면에 그려진 선(연결 종류 필터·약한 기록 숨김 적용 뒤)으로 계산한다. 선이 없는데 카드만 밝게 남지 않도록.
+  const selVisible = !!sel && visibleRecs.some((r) => r.id === sel);
+  const lin = useMemo(() => (sel && selVisible ? lineage(links, sel) : null), [links, sel, selVisible]);
+  // 선택한 기록과 같은 시기에 함께 다룬 기록(점선으로 그려짐)도 밝게 둔다
+  const sameTime = useMemo(() => {
+    const set = new Set<string>();
+    if (!sel || !selVisible) return set;
+    for (const l of links) if (l.rel === '동시') { if (l.from === sel) set.add(l.to); else if (l.to === sel) set.add(l.from); }
+    return set;
+  }, [links, sel, selVisible]);
   const themeIds = useMemo(() => {
     if (!theme) return null;
     const th = an.themes.find((t) => t.name === theme);
@@ -122,11 +134,11 @@ export function TreeBoard({ an, student }: { an: Analysis; student: StudentEntry
   }, [an.themes, theme]);
   const inFocus = useCallback(
     (id: string) => {
-      if (lin) return id === sel || lin.up.has(id) || lin.down.has(id);
+      if (lin) return id === sel || lin.up.has(id) || lin.down.has(id) || sameTime.has(id);
       if (themeIds) return themeIds.has(id);
       return true;
     },
-    [lin, sel, themeIds],
+    [lin, sel, themeIds, sameTime],
   );
   const emph = useCallback(
     (l: Link): Emph => {
@@ -242,8 +254,9 @@ export function TreeBoard({ an, student }: { an: Analysis; student: StudentEntry
       <TreeToolbar an={an} links={faintLinks} zoomPct={Math.round(z * 100)} faintCount={faintCount} />
       <div
         ref={containerRef}
-        className={cn('panel relative overflow-auto overscroll-x-contain print:max-h-none print:overflow-visible print:rounded-none print:border-0', wide ? 'rounded-none' : '')}
-        style={{ maxHeight: `max(360px, calc(100vh - ${topPx}px))` }}
+        className={cn('panel relative overflow-auto overscroll-x-contain md:max-h-[var(--board-max)] print:max-h-none print:overflow-visible print:rounded-none print:border-0', wide ? 'rounded-none' : '')}
+        // 폰 너비에서는 높이를 제한하지 않고 페이지 스크롤에 맡긴다(가로 스크롤만 보드 안). md 이상에서만 화면 높이에 맞춘다.
+        style={{ '--board-max': `max(360px, calc(100vh - ${topPx}px))` } as React.CSSProperties}
       >
         {!visibleRecs.length ? (
           <div className="p-6">
@@ -330,7 +343,7 @@ export function TreeBoard({ an, student }: { an: Analysis; student: StudentEntry
               >
                 <div className="text-[14px] font-bold leading-tight text-ink">{ln.label}</div>
                 <div className="mt-0.5 text-[12px] text-muted">
-                  {ln.cc ? '창체' : '교과'} · 기록 {ln.cards.length}
+                  {ln.cc ? '창체' : '교과'} · 기록 {ln.cards.length}건
                 </div>
               </div>
             ))}

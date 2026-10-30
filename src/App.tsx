@@ -3,11 +3,12 @@ import { AppProvider, useApp } from './state/store';
 import { useAnalysis, dropAnalysisCache } from './hooks/useAnalysis';
 import { ingestFiles } from './lib/files';
 import { download, makeWorkFile, mergeUserDict, todayStamp } from './lib/storage';
-import { restoreTheme, toggleTheme } from './lib/theme';
-import { uid } from './lib/utils';
+import { isDark, restoreTheme, toggleTheme } from './lib/theme';
+import { blindName, uid } from './lib/utils';
 import { sampleStudent } from './fixtures/sample';
 import type { StudentEntry } from './engine/types';
 import { semLabel } from './engine/analyze';
+import { LANE } from './engine/dict/subjects';
 import { Landing } from './components/Landing';
 import { TopBar } from './components/TopBar';
 import { StudentHead } from './components/StudentHead';
@@ -35,8 +36,11 @@ function Shell() {
   const an = useAnalysis(student, state.userDict);
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [dark, setDark] = useState(false);
+  /** 직접 입력 창에 적은 내용이 있는지(창을 닫기 전 확인용). ManualInput이 알려 준다. */
+  const manualDirty = useRef(false);
 
-  useEffect(() => { restoreTheme(); }, []);
+  useEffect(() => { restoreTheme(); setDark(isDark()); }, []);
 
   // 알림은 2.6초 뒤 사라짐
   useEffect(() => {
@@ -52,16 +56,25 @@ function Shell() {
     return () => window.removeEventListener('beforeunload', h);
   }, [state.dirty, state.students.length]);
 
-  // Esc: 옆 창 닫기 → 넓게 보기 해제
+  /** 직접 입력 창 닫기. 적은 내용이 있으면 확인을 받는다(한글 입력 중 Esc, 바깥 클릭으로 내용이 사라지지 않게). */
+  const closeManual = useCallback(() => {
+    if (manualDirty.current && !confirm('직접 입력 창에 적은 내용이 있습니다. 닫으면 사라집니다. 닫을까요?')) return;
+    manualDirty.current = false;
+    dispatch({ type: 'closeSide' });
+  }, [dispatch]);
+
+  // Esc: 옆 창 닫기 → 관심 주제 강조 해제 → 넓게 보기 해제. 한글 조합 중(IME) Esc는 글자 취소이므로 건너뛴다.
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      if (state.side) dispatch({ type: 'closeSide' });
+      if (e.key !== 'Escape' || e.isComposing || e.defaultPrevented) return;
+      if (state.side === 'manual') closeManual();
+      else if (state.side) dispatch({ type: 'closeSide' });
+      else if (state.theme) dispatch({ type: 'setTheme', theme: null });
       else if (state.wide) dispatch({ type: 'toggleWide', value: false });
     };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
-  }, [state.side, state.wide, dispatch]);
+  }, [state.side, state.theme, state.wide, dispatch, closeManual]);
 
   const toast = useCallback((text: string) => dispatch({ type: 'toast', text }), [dispatch]);
 
@@ -73,8 +86,11 @@ function Shell() {
       if (res.dicts.length) {
         let dict = state.userDict;
         for (const d of res.dicts) dict = mergeUserDict(dict, d);
-        dropAnalysisCache();
-        dispatch({ type: 'setUserDict', dict });
+        // 새 표현이 없으면(작업 파일에 든 사전이 이미 있는 것과 같으면) 바꾸지 않는다. 그래야 불러오기만 해도 '저장하지 않은 메모' 확인이 뜨지 않는다.
+        if (JSON.stringify(dict) !== JSON.stringify(state.userDict)) {
+          dropAnalysisCache();
+          dispatch({ type: 'setUserDict', dict });
+        }
       }
       dispatch({ type: 'addStudents', entries: res.entries, errors: res.errors });
       if (res.errors.length) toast(`${res.errors.length}개 파일을 읽지 못했습니다. 화면의 안내를 확인해 주세요.`);
@@ -94,7 +110,9 @@ function Shell() {
   const saveWork = useCallback(() => {
     if (!state.students.length) return;
     const now = new Date();
-    download(`탐구분석지도_작업_${todayStamp(now)}.json`, JSON.stringify(makeWorkFile(state.students, state.userDict, now)));
+    // 공백만 남은 기록 메모는 저장하지 않는다
+    const students = state.students.map((s) => ({ ...s, recMemo: Object.fromEntries(Object.entries(s.recMemo || {}).filter(([, t]) => t.trim())) }));
+    download(`탐구분석지도_작업_${todayStamp(now)}.json`, JSON.stringify(makeWorkFile(students, state.userDict, now)));
     dispatch({ type: 'markSaved' });
     toast('작업 파일을 저장했습니다. 학생 개인정보가 담긴 파일이니 학교 지침에 따라 안전하게 보관해 주세요.');
   }, [state.students, state.userDict, dispatch, toast]);
@@ -130,9 +148,12 @@ function Shell() {
   }, [handleFiles]);
 
   const manualDone = useCallback((entry: StudentEntry) => {
-    dispatch({ type: 'addStudents', entries: [entry] });
+    manualDirty.current = false;
+    dispatch({ type: 'addStudents', entries: [entry], dirty: true });
     toast('직접 입력한 기록을 분석했습니다.');
   }, [dispatch, toast]);
+  const onManualDirty = useCallback((d: boolean) => { manualDirty.current = d; }, []);
+  const manualInput = <ManualInput onDone={manualDone} onCancel={closeManual} onDirty={onManualDirty} />;
 
   const hiddenInput = (
     <input ref={fileInput} type="file" accept=".pdf,.json,application/pdf" multiple hidden onChange={(e) => { const fs = [...(e.target.files || [])]; e.target.value = ''; void handleFiles(fs); }} />
@@ -149,10 +170,11 @@ function Shell() {
           onClearErrors={() => dispatch({ type: 'setErrors', errors: [] })}
         />
         {state.side === 'manual' ? (
-          <div className="fixed inset-0 z-50 flex justify-end bg-black/20" onClick={() => dispatch({ type: 'closeSide' })}>
-            <div onClick={(e) => e.stopPropagation()} className="h-full">
-              <SideDrawer open kicker="붙여 넣기" title="세특 직접 입력" onClose={() => dispatch({ type: 'closeSide' })} defaultWidth={620}>
-                <ManualInput onDone={manualDone} onCancel={() => dispatch({ type: 'closeSide' })} />
+          <div className="fixed inset-0 z-50 flex justify-end bg-scrim" onClick={closeManual}>
+            {/* flex로 감싸 옆 창이 화면 아래까지 늘어나게 한다(md 이상에서 aside는 static) */}
+            <div onClick={(e) => e.stopPropagation()} className="flex h-full max-w-full">
+              <SideDrawer open kicker="붙여 넣기" title="직접 입력" onClose={closeManual} defaultWidth={620}>
+                {manualInput}
               </SideDrawer>
             </div>
           </div>
@@ -166,12 +188,14 @@ function Shell() {
   }
 
   const selRec = state.sel ? an.recs.find((r) => r.id === state.sel) : null;
+  // 이름 가리기는 옆 창 머리글에도 적용한다(파일 이름은 StudentHead가 따로 가린다)
+  const shownName = state.blind ? blindName(student.data.meta.name || '') : (student.data.meta.name || '');
   const sideTitle: Record<string, { kicker: string; title: string; width?: number }> = {
-    rec: { kicker: selRec ? `${selRec.kind} · ${selRec.lane} · ${semLabel(selRec)}` : '', title: selRec?.subj || '' },
+    rec: { kicker: selRec ? `${selRec.kind} · ${LANE[selRec.lane]?.label ?? selRec.lane} · ${semLabel(selRec)}` : '', title: selRec?.subj || '' },
     mlist: { kicker: '근거 문장', title: '탐구 방법', width: Math.max(360, Math.min(620, Math.round(window.innerWidth * 0.42))) },
-    dict: { kicker: student.data.meta.name || '', title: '표현 사전' },
-    note: { kicker: student.data.meta.name || '', title: '상담 노트' },
-    manual: { kicker: '붙여 넣기', title: '세특 직접 입력', width: 620 },
+    dict: { kicker: shownName, title: '표현 사전' },
+    note: { kicker: shownName, title: '상담 노트' },
+    manual: { kicker: '붙여 넣기', title: '직접 입력', width: 620 },
   };
   const side = state.side ? sideTitle[state.side] : null;
 
@@ -184,6 +208,7 @@ function Shell() {
           view={state.view}
           side={state.side}
           blind={state.blind}
+          dark={dark}
           onSelect={(i) => dispatch({ type: 'selectStudent', index: i })}
           onView={(v) => dispatch({ type: 'setView', view: v })}
           onAddFiles={() => fileInput.current?.click()}
@@ -193,7 +218,7 @@ function Shell() {
           onSave={saveWork}
           onPrint={() => setTimeout(() => window.print(), 60)}
           onWipe={wipe}
-          onTheme={() => toggleTheme()}
+          onTheme={() => setDark(toggleTheme() === 'dark')}
         />
       ) : null}
       <div className="flex min-h-0 flex-1">
@@ -211,12 +236,12 @@ function Shell() {
           <PrintNotes an={an} student={student} />
         </main>
         {side ? (
-          <SideDrawer open kicker={side.kicker} title={side.title} defaultWidth={side.width} onClose={() => dispatch({ type: 'closeSide' })}>
+          <SideDrawer open kicker={side.kicker} title={side.title} defaultWidth={side.width} onClose={state.side === 'manual' ? closeManual : () => dispatch({ type: 'closeSide' })}>
             {state.side === 'rec' && state.sel ? <RecordDrawer an={an} student={student} id={state.sel} /> : null}
             {state.side === 'mlist' && state.mSel ? <MethodList an={an} student={student} sel={state.mSel} /> : null}
             {state.side === 'dict' ? <DictPanel an={an} student={student} /> : null}
             {state.side === 'note' ? <NotesView an={an} student={student} compact /> : null}
-            {state.side === 'manual' ? <ManualInput onDone={manualDone} onCancel={() => dispatch({ type: 'closeSide' })} /> : null}
+            {state.side === 'manual' ? manualInput : null}
           </SideDrawer>
         ) : null}
       </div>
@@ -238,7 +263,7 @@ function DropHint() {
 
 /** 인쇄 전용: 상담 메모와 기록별 메모 */
 function PrintNotes({ an, student }: { an: ReturnType<typeof useAnalysis> & object; student: StudentEntry }) {
-  const rm = Object.entries(student.recMemo || {}).filter(([id]) => an.recs.some((r) => r.id === id));
+  const rm = Object.entries(student.recMemo || {}).filter(([id, t]) => t.trim() && an.recs.some((r) => r.id === id));
   if (!(student.memo || '').trim() && !rm.length) return null;
   return (
     <section className="hidden print:block mt-6 text-[12px]">

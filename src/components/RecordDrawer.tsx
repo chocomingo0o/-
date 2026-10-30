@@ -62,7 +62,7 @@ export function RecordDrawer({ an, student, id }: { an: Analysis; student: Stude
 
       {/* 1. 원문 */}
       <section>
-        <SectionTitle sub={`방법 표현 ${counts.method}곳 · 관심 주제 ${counts.theme}곳 · 과학 탐구 기능 ${counts.skill}곳 · 핵심 문장 ${r.key.length}개`}>생기부 원문</SectionTitle>
+        <SectionTitle sub={`방법 표현 ${counts.method}곳 · 관심 주제 ${counts.theme}곳 · 과학 탐구 기능 ${counts.skill}곳 · 핵심 문장 ${r.key.length}개`}>학생부 원문</SectionTitle>
         <ul className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-muted" aria-label="형광펜 범례">
           <li><mark className="m">방법 표현</mark></li>
           <li><mark className="t">관심 주제</mark></li>
@@ -98,7 +98,7 @@ export function RecordDrawer({ an, student, id }: { an: Analysis; student: Stude
 
       {/* 4. 기록 메모 */}
       <section>
-        <SectionTitle sub="입력한 내용은 상담 노트와 작업 파일에 함께 담깁니다.">이 기록에 대한 상담 메모</SectionTitle>
+        <SectionTitle sub="입력한 내용은 상담 노트와 작업 파일에 함께 담깁니다.">이 기록의 상담 메모</SectionTitle>
         <textarea
           value={memo}
           onChange={(e) => dispatch({ type: 'setRecMemo', id, text: e.target.value })}
@@ -153,7 +153,7 @@ export function RecordDrawer({ an, student, id }: { an: Analysis; student: Stude
             ) : <span className="text-muted">관통하는 관심 주제 없음</span>}
           </Row>
           <Row label="계보">
-            <span>앞선 {lin.up.size}개 · 뒤이은 {lin.down.size}개</span>
+            <span>앞선 기록 {lin.up.size}건 · 뒤이은 기록 {lin.down.size}건</span>
           </Row>
         </dl>
       </section>

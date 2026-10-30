@@ -10,9 +10,12 @@ export function StudentHead({ an, student, blind }: { an: Analysis; student: Stu
   const real = an.recs.filter((r) => !r.faint);
   const hopes = (S.hopes || []).filter((h) => h.text).map((h) => `${h.year}학년 ${h.text}`).join(' → ');
   const fields = fieldProfile(an);
+  // 이름 가리기 중에는 파일 이름도 감춘다(NEIS PDF 파일 이름에는 보통 학생 이름이 들어 있다)
+  const fileLabel = blind && /\.(pdf|json)\b/i.test(student.file) ? '파일 이름 가림' : student.file;
   const stats = [
     { n: real.length, l: '탐구가 드러난 기록' },
-    { n: an.links.filter((l) => l.rel !== '동시').length, l: '이어진 연결' },
+    // 도구줄의 '모든 연결'은 같은 시기까지 센 값이라 라벨에 밝혀 둔다
+    { n: an.links.filter((l) => l.rel !== '동시').length, l: '이어진 연결(같은 시기 제외)' },
     { n: new Set(an.recs.flatMap((r) => r.methods)).size, l: '쓴 탐구 방법' },
     { n: an.themes.length, l: '관통하는 관심 주제' },
   ];
@@ -26,15 +29,15 @@ export function StudentHead({ an, student, blind }: { an: Analysis; student: Stu
           {S.meta.sample ? <Pill className="border-note-lavender-ink text-note-lavender-ink">가상 예시</Pill> : null}
         </div>
         <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-ink-2">
-          <span className="text-muted">{student.file}</span>
+          <span className="text-muted">{fileLabel}</span>
           {hopes ? <span><b className="font-semibold text-ink">진로 희망</b> {hopes}</span> : null}
           {fields.length ? <span><b className="font-semibold text-ink">관심 분야</b> {fields.join(', ')}</span> : null}
           {S.warnings?.length ? <span className="text-note-yellow-ink">{S.warnings[0]}</span> : null}
         </div>
       </div>
-      <dl className="flex flex-wrap gap-x-6 gap-y-2">
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:flex sm:flex-wrap">
         {stats.map((s) => (
-          <div key={s.l} className="min-w-[88px]">
+          <div key={s.l} className="sm:min-w-[88px]">
             <dt className="text-[12px] text-muted">{s.l}</dt>
             <dd className="text-[22px] font-bold leading-none">{s.n}</dd>
           </div>

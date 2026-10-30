@@ -1,13 +1,12 @@
 import React from 'react';
 import type { GradeChip as GradeChipT, LinkKind } from '../../engine/types';
+import { DEPTH_TXT } from '../../engine/analyze';
 import { cn } from '../../lib/utils';
 
-export const DEPTH_LABEL = ['', '정리·참여', '조사·분석', '분석·실험', '성찰·확장'] as const;
-
-/** 탐구 깊이 막대 1~4칸 */
+/** 탐구 깊이 막대 1~4칸. 깊이 이름은 엔진의 DEPTH_TXT 한 곳만 쓴다(범례·상세 창과 같은 이름). */
 export function DepthBars({ d, className }: { d: number; className?: string }) {
   return (
-    <span className={cn('inline-flex items-end gap-[2px]', className)} title={`탐구 깊이 ${d}단계 · ${DEPTH_LABEL[d] ?? ''}`} aria-label={`탐구 깊이 ${d}단계`}>
+    <span role="img" className={cn('inline-flex items-end gap-[2px]', className)} title={`탐구 깊이 ${d}단계 · ${DEPTH_TXT[d] ?? ''}`} aria-label={`탐구 깊이 ${d}단계 ${DEPTH_TXT[d] ?? ''}`}>
       {[1, 2, 3, 4].map((i) => (
         <i key={i} className={cn('block w-[4px] rounded-[1px]', i <= d ? 'bg-ink' : 'bg-hair-2')} style={{ height: 4 + i * 3 }} />
       ))}
@@ -78,7 +77,7 @@ export function Toast({ text }: { text: string | null }) {
 export function Busy({ text }: { text: string | null }) {
   if (!text) return null;
   return (
-    <div className="noprint fixed inset-0 z-[70] flex items-center justify-center bg-black/20">
+    <div role="status" aria-live="polite" aria-busy="true" className="noprint fixed inset-0 z-[70] flex items-center justify-center bg-scrim">
       <div className="flex items-center gap-3 rounded-lg border border-hair bg-surface px-5 py-4 text-[14px] shadow-[0_2px_8px_var(--ring)]">
         <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-hair-2 border-t-ink" aria-hidden />
         <span>{text}</span>

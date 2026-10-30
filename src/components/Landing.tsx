@@ -31,7 +31,7 @@ export function Landing({ onFiles, onSample, onManual, errors, onClearErrors }: 
         <h1 className="text-[34px] font-bold leading-[1.25] tracking-[-0.02em] md:text-[44px]">탐구분석지도</h1>
         <p className="mt-3 max-w-[640px] text-[16px] leading-[1.7] text-ink-2">
           학생부 PDF를 올리면 세특과 창체 속 탐구가 어디서 시작해 어디로 이어졌는지 한 장의 계보도로 보여 줍니다.
-          학기별, 교과별로 어떤 탐구 방법을 썼고 무엇이 비어 있는지도 함께 확인할 수 있습니다.
+          학기별, 교과군(교과를 묶은 줄)별로 어떤 탐구 방법을 썼고 무엇이 비어 있는지도 함께 확인할 수 있습니다.
         </p>
       </header>
 
@@ -56,7 +56,7 @@ export function Landing({ onFiles, onSample, onManual, errors, onClearErrors }: 
             <Sparkles className="h-4 w-4" /> 예시 학생 보기
           </button>
           <button className="btn ghost" type="button" onClick={onManual}>
-            <PenLine className="h-4 w-4" /> 세특 직접 입력
+            <PenLine className="h-4 w-4" /> 직접 입력
           </button>
         </div>
         <input ref={inputRef} type="file" accept=".pdf,.json,application/pdf" multiple hidden onChange={(e) => { pick(e.target.files); e.target.value = ''; }} />
@@ -92,9 +92,9 @@ export function Landing({ onFiles, onSample, onManual, errors, onClearErrors }: 
         <div className="mb-1 flex items-center gap-2 font-semibold text-ink"><ShieldCheck className="h-4 w-4" /> 개인정보 안내</div>
         <ul className="list-disc pl-5">
           <li>학생부 PDF는 선생님의 브라우저 안에서만 읽고 분석합니다. 서버, 클라우드, AI 서비스로 보내지 않습니다.</li>
-          <li>분석 결과와 메모는 창을 닫으면 사라집니다. 브라우저에는 선생님이 추가한 표현 사전 낱말만 저장됩니다.</li>
+          <li>분석 결과와 메모는 창을 닫으면 사라집니다. 브라우저에는 선생님이 추가한 표현 사전 낱말과 밝게/어둡게 설정만 저장됩니다.</li>
           <li>작업 저장 파일(.json)과 인쇄물에는 학생 개인정보가 들어 있으니 학교 지침에 따라 보관하고 파기해 주세요.</li>
-          <li>판단은 문장에 쓰인 표현을 근거로 한 참고 자료입니다. 원문과 함께 보고 학생에게 직접 확인해 주세요.</li>
+          <li>분석 결과는 문장에 쓰인 표현을 근거로 한 참고 자료입니다. 원문과 함께 보고 학생에게 직접 확인해 주세요.</li>
         </ul>
       </section>
     </main>

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import type { Link } from '../../engine/types';
+import { cn } from '../../lib/utils';
 import { KIND_LABEL, KIND_VAR, KindChip } from '../common';
 
 export interface CardRect { x: number; y: number; w: number; h: number }
@@ -60,17 +61,30 @@ function dashOf(l: Link): string | undefined {
 }
 
 interface Item { l: Link; geo: Geo; e: Emph; key: string }
-interface Label extends Item { x: number; y: number; w: number }
+/** n: 같은 자리에 같은 종류로 겹친 연결 수(2 이상이면 칩 하나로 합쳐 표시) */
+interface Label extends Item { x: number; y: number; w: number; n: number }
+
+/** 칩 높이(KindChip 11.5px × 1.5 + 여백 ≈ 19px). 버튼은 flex라 줄 높이를 더하지 않는다. */
+const LABEL_H = 20;
 
 /**
  * 라벨이 겹치면 밀어낸다(가까운 순서대로 간단히 처리).
  * 가로 선의 라벨은 위아래로, 세로 선의 라벨(줄 사이 틈에 있음)은 좌우로 민다.
+ * 같은 기준점에 같은 종류의 라벨이 둘 이상이면 하나로 합친다(한 카드에서 같은 종류로 여러 선이 나갈 때).
  */
 function placeLabels(items: Item[]): Label[] {
   const out: Label[] = [];
-  const h = 20;
+  const h = LABEL_H;
   const sorted = items.slice().sort((p, q) => p.geo.anchor.x - q.geo.anchor.x || p.geo.anchor.y - q.geo.anchor.y);
+  const merged = new Map<string, Label>();
   for (const it of sorted) {
+    const mk = `${it.l.rel}@${Math.round(it.geo.anchor.x)},${Math.round(it.geo.anchor.y)}`;
+    const dup = merged.get(mk);
+    if (dup) {
+      dup.n++;
+      if (ORDER[it.e] > ORDER[dup.e]) dup.e = it.e; // 강조된 선이 하나라도 있으면 칩도 또렷하게
+      continue;
+    }
     const w = KIND_LABEL[it.l.rel].length * 11.5 + 14;
     let { x, y } = it.geo.anchor;
     for (let k = 0; k < 8; k++) {
@@ -79,10 +93,12 @@ function placeLabels(items: Item[]): Label[] {
       // 아래, 위, 더 아래, 더 위 … (세로 선은 오른쪽, 왼쪽 …) 순서로 시도
       const n = Math.ceil((k + 1) / 2);
       const sign = k % 2 === 0 ? 1 : -1;
-      if (it.geo.dir === 'h') y = it.geo.anchor.y + sign * n * (h + 2);
+      if (it.geo.dir === 'h') y = it.geo.anchor.y + sign * n * (h + 4);
       else x = it.geo.anchor.x + sign * n * (w + 6);
     }
-    out.push({ ...it, x, y, w });
+    const label: Label = { ...it, x, y, w, n: 1 };
+    merged.set(mk, label);
+    out.push(label);
   }
   return out;
 }
@@ -133,20 +149,25 @@ export function LinkLayer({ links, rects, width, height, emph, onLabel }: LinkLa
         })}
       </svg>
       <div className="pointer-events-none absolute left-0 top-0 z-[3]" style={{ width, height }}>
-        {labels.map(({ l, x, y, e, key }) => (
+        {labels.map(({ l, x, y, e, key, n }) => (
           <button
             key={key}
             type="button"
-            title={l.sent}
-            aria-label={`${KIND_LABEL[l.rel]} 연결, 이어진 기록 열기`}
+            title={n > 1 ? `같은 종류 연결 ${n}개` : l.sent}
+            aria-label={`${KIND_LABEL[l.rel]} 연결${n > 1 ? ` ${n}개` : ''}, 이어진 기록 열기`}
             onClick={(ev) => {
               ev.stopPropagation();
               onLabel(l);
             }}
-            className="pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded shadow-[0_0_0_2px_var(--surface)] transition-opacity duration-150 hover:opacity-100 focus-visible:opacity-100"
-            style={{ left: x, top: y, opacity: OPACITY[e] }}
+            // 흐림은 클래스로 준다(인라인 style이면 focus-visible이 이기지 못해 키보드 초점이 보이지 않는다)
+            className={cn(
+              'pointer-events-auto absolute flex -translate-x-1/2 -translate-y-1/2 rounded shadow-[0_0_0_2px_var(--surface)] transition-opacity duration-150 hover:opacity-100 focus-visible:opacity-100',
+              e === 'lo' ? 'opacity-15' : e === 'mid' ? 'opacity-85' : 'opacity-100',
+            )}
+            style={{ left: x, top: y }}
           >
             <KindChip kind={l.rel} />
+            {n > 1 ? <span className="num ml-px inline-flex items-center rounded bg-surface px-1 text-[11px] font-bold text-ink">{n}</span> : null}
           </button>
         ))}
       </div>
