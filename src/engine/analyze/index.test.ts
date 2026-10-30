@@ -8,7 +8,7 @@ import {
   DEPTH_TXT, LINK_KINDS, lineage, semLabel, slotIdx, compileMethods, methodHits, sentences, summarize,
 } from './index';
 import { sampleStudent } from '../../fixtures/sample';
-import type { Analysis, Link, Rec, StudentRecord } from '../types';
+import type { Analysis, Link, Rec, StudentRecord, UserDict } from '../types';
 
 const S = sampleStudent();
 const an: Analysis = analyze(S);
@@ -75,7 +75,7 @@ describe('analyze(sampleStudent())', () => {
   it('효소 줄기: 과학탐구실험1 → 동아리 또는 2학년 생명과학 연결이 있고, 줄기 안에 심화가 하나 이상 있다', () => {
     const t1 = rec('통합과학1');
     const lab = rec('과학탐구실험1');
-    const club1 = rec('동아리활동 (생명과학탐구반)');
+    const club1 = rec('동아리활동(생명과학탐구반)');
     const bio = rec('생명과학', 2);
 
     const toClub = linkBetween(lab, club1);
@@ -119,7 +119,7 @@ describe('analyze(sampleStudent())', () => {
   it('항생제 줄기: 교과군이 바뀌는 연결(cross)이 있다', () => {
     const t2 = rec('통합과학2');
     const eng = rec('영어Ⅰ');
-    const club2 = rec('동아리활동 (미생물탐구반)');
+    const club2 = rec('동아리활동(미생물탐구반)');
     const l1 = linkBetween(t2, eng);
     const l2 = linkBetween(t2, club2);
     expect(l1 || l2).toBeTruthy();
@@ -221,15 +221,14 @@ describe('highlightSegments', () => {
     expect(kinds.has('theme')).toBe(true);
     expect(kinds.has('skill')).toBe(true);
     // 관심 주제 낱말(대표 낱말이나 합쳐진 낱말)은 원문에서 그대로 찾히고, 라벨은 주제 이름이다.
-    // '카탈레이스' 자체는 실험·측정 사전에도 들어 있어 방법(노랑)이 먼저 차지하므로, 주제 구간은 합쳐진 낱말('반응')로 남는다.
     const theme = an.themes.find((t) => t.name === '카탈레이스')!;
     const themeSegs = segs.filter((s) => s.kind === 'theme');
     expect(themeSegs.every((s) => r.themes.includes(s.label))).toBe(true);
     const mine = themeSegs.filter((x) => x.label === '카탈레이스');
     expect(mine.length).toBeGreaterThan(0);
     for (const s of mine) expect(theme.words).toContain(r.text.slice(s.a, s.b));
-    // 방법 구간은 같은 자리에서 주제 구간보다 먼저다
-    expect(segs.filter((s) => s.kind === 'method').some((s) => r.text.slice(s.a, s.b) === '카탈레이스')).toBe(true);
+    // 방법 구간은 사전 표현('반복 측정', '측정하여' …)을 원문에서 그대로 가리킨다
+    expect(segs.filter((s) => s.kind === 'method').some((s) => /변인|측정|실험|반복/.test(r.text.slice(s.a, s.b)))).toBe(true);
     // 방법 라벨은 사전의 이름이다
     const methodSeg = segs.find((s) => s.kind === 'method')!;
     expect(methodSeg.label).toMatch(/·|\s/);
@@ -290,9 +289,25 @@ describe('재export', () => {
   });
 
   it('lineage는 효소 줄기의 뿌리부터 끝까지 이어진다', () => {
-    const club2 = rec('동아리활동 (미생물탐구반)');
+    const club2 = rec('동아리활동(미생물탐구반)');
     const { up } = lineage(an.links, club2.id);
     expect(up.has(rec('통합과학2').id)).toBe(true);
     expect(up.size).toBeGreaterThanOrEqual(3);
+  });
+});
+
+/* ───────────────────────── 리뷰 뒤 보강 ───────────────────────── */
+describe('highlightSegments: 사용자 사전 캐시는 내용 기준이다', () => {
+  it('같은 객체를 제자리에서 고쳐도 새 표현이 형광펜에 반영된다', () => {
+    const S2 = sampleStudent();
+    const ud: UserDict = { experiment: [] };
+    const a1 = analyze(S2, ud);
+    const r1 = a1.recs.find((x) => x.subj === '공통국어1')!;
+    expect(highlightSegments(r1, a1, ud).some((s) => s.label.includes('추가한 표현'))).toBe(false);
+    ud.experiment!.push('구조도로 정리');
+    const a2 = analyze(S2, ud);
+    const r2 = a2.recs.find((x) => x.subj === '공통국어1')!;
+    expect(r2.sents.some((s) => s.ms.includes('experiment'))).toBe(true);
+    expect(highlightSegments(r2, a2, ud).some((s) => s.label.includes('추가한 표현'))).toBe(true);
   });
 });

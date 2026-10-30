@@ -16,6 +16,8 @@
  *                    평균 깊이, 아직 안 쓴 3단계 방법.
  *   lanes            기록이 있는 교과군만. 기대 방법은 dict/subjects.ts의 LANE[lane].expected. missing = expected 중 한 번도 안 쓴 것.
  *   trend            학기 흐름 문장(학기별 3단계 비율과 평균 깊이, 앞뒤 학기 변화).
+ *                    학기 구분 없는 기록(창체)만 있는 칸은 '○학년 (학년 전체)'로 부르고, 같은 기록이 앞 칸에도 들어 있으면
+ *                    (예: 2학년 1학기 세특 + 2학년 창체 → 2-2 칸) 자기 자신과 비교하는 변화 문장을 만들지 않는다.
  *   suggestions      제안 문장. 'd' 방향, 'g' 점검.
  *                      1) 교과군 결손: 기록 2건 이상인 교과군에서 기대 방법이 한 번도 안 나옴.
  *                         창체 줄(진로·동아리·자율·자치)은 진로 희망 분야와 맞는 방법만 결손으로 본다.
@@ -176,6 +178,16 @@ function listJo(labels: string[], a: string, b: string): string {
   return `${labels.join(', ')}${jo(last, a, b)}`;
 }
 
+/**
+ * 결손 문장. 방법이 하나면 '○○ 기록 N건 가운데 A가 드러난 기록이 없습니다',
+ * 둘 이상이면 '○○ 기록 N건에 A, B 가운데 어느 것도 드러나지 않습니다'로 적어
+ * 'A와 B를 함께 쓴 기록이 없다'로 읽히지 않게 한다. tail은 '진로 희망 분야(…)와 이어지는 ' 같은 관형어(선택).
+ */
+function missingSentence(where: string, n: number, labels: string[], modifier: string = ''): string {
+  if (labels.length >= 2) return `${where} 기록 ${n}건에 ${modifier}${labels.join(', ')} 가운데 어느 것도 드러나지 않습니다.`;
+  return `${where} 기록 ${n}건 가운데 ${modifier}${listJo(labels, '이', '가')} 드러난 기록이 없습니다.`;
+}
+
 /** 기록에 3단계 방법이 하나라도 있는지 */
 const hasLv3 = (r: Rec): boolean => r.methods.some((k) => METHOD[k]?.lv === 3);
 
@@ -320,31 +332,52 @@ export function buildGaps(recs: Rec[], links: Link[], S: StudentRecord): GapRepo
   if (!slots.length) {
     trend.push('분석할 기록이 없습니다.');
   } else {
-    // 그 학기 기록으로 들어오는 연결(같은 시기 연결은 빼고) 수
+    // 학기 구분 없는 기록(창체)만 있는 칸. 같은 기록이 이웃 칸에도 들어가므로 '○학년 (학년 전체)'로 부른다
+    const yearOnly = (st: SlotStat): boolean => st.recIds.every((id) => byId.get(id)?.sem == null);
+    const label = (st: SlotStat): string => (yearOnly(st) ? `${st.year}학년 (학년 전체)` : semLabel(st));
+    // 앞 칸(a)에 든 기록만으로 채워진 뒤 칸(b): 2학년 1학기 세특 + 2학년 창체 → 2-2 칸. 비교하면 자기 자신과 비교하는 셈이다
+    const sameRecs = (a: SlotStat, b: SlotStat): boolean => {
+      const ids = new Set(a.recIds);
+      return yearOnly(b) && b.recIds.every((id) => ids.has(id));
+    };
+    // 그 학기로 들어오는 연결(같은 시기 연결은 빼고)을 받은 기록 수. 같은 칸 안의 기록에서 온 연결(1-1 세특 → 1학년 창체)은
+    // '앞 학기 탐구를 이어받은' 것이 아니므로 세지 않는다
     const inbound = (st: SlotStat): number => {
       const ids = new Set(st.recIds);
-      return (links ?? []).filter((l) => l.rel !== '동시' && ids.has(l.to) && byId.has(l.from)).length;
+      const got = new Set<string>();
+      for (const l of links ?? []) {
+        if (l.rel === '동시' || !ids.has(l.to) || !byId.has(l.from) || ids.has(l.from)) continue;
+        got.add(l.to);
+      }
+      return got.size;
     };
-    // 학기 구분 없는 기록(창체)만 있는 칸은 같은 기록이 이웃 칸에도 들어가므로 그 사실을 적는다
-    const yearOnly = (st: SlotStat): boolean => st.recIds.every((id) => byId.get(id)?.sem == null);
-    const yearOnlyNote = (st: SlotStat): string => (yearOnly(st) ? '. 학기 구분 없는 기록만 있는 학기입니다' : '');
     const first = slots[0];
     const n0 = first.recIds.length;
     const k0 = Math.round(first.lv3Share * n0);
     const in0 = inbound(first);
     trend.push(
-      `${semLabel(first)}: 기록 ${n0}건, 3단계 방법이 든 기록 ${k0}건(${pct(first.lv3Share)}%), 평균 깊이 ${f1(first.avgDepth)}` +
-        (in0 ? `, 앞 탐구를 이어받은 기록 ${in0}건` : '') +
-        yearOnlyNote(first),
+      `${label(first)}: 기록 ${n0}건, 3단계 방법이 든 기록 ${k0}건(${pct(first.lv3Share)}%), 평균 깊이 ${f1(first.avgDepth)}` +
+        (in0 ? `, 앞 탐구를 이어받은 기록 ${in0}건` : ''),
     );
+    // 변화 문장을 만든 마지막 칸(학년 전체 칸으로 되풀이된 칸은 건너뛴다)
+    let prev = first;
     for (let i = 1; i < slots.length; i++) {
-      const a = slots[i - 1];
       const b = slots[i];
       // 사이에 기록이 없는 학기가 있으면 그 사실을 적는다
-      for (let s = a.slot + 1; s < b.slot; s++) {
+      for (let s = slots[i - 1].slot + 1; s < b.slot; s++) {
         const [y, se] = SLOTS[s];
         trend.push(`${semLabel({ year: y, sem: se })}: 기록 없음`);
       }
+      if (sameRecs(prev, b)) {
+        // 앞 칸과 같은 학년 창체만 다시 들어 있는 칸: 변화 문장 대신 사실만 적는다
+        trend.push(
+          yearOnly(prev)
+            ? `${semLabel(b)}: ${b.year}학년 (학년 전체) 기록이 이 학기에도 걸쳐 있습니다`
+            : `${semLabel(b)}: 아직 학기별 기록이 없습니다(${b.year}학년 전체 창체 기록 ${b.recIds.length}건만 두 학기에 걸쳐 있음)`,
+        );
+        continue;
+      }
+      const a = prev;
       const ds = b.lv3Share - a.lv3Share;
       const dd = b.avgDepth - a.avgDepth;
       const shareDir = Math.abs(ds) < 0.1 ? '그대로' : ds > 0 ? '올라감' : '내려감';
@@ -352,12 +385,12 @@ export function buildGaps(recs: Rec[], links: Link[], S: StudentRecord): GapRepo
       const inb = inbound(b);
       const nb = b.recIds.length;
       trend.push(
-        `${semLabel(a)} → ${semLabel(b)}: 3단계 방법이 든 기록 비율 ${pct(a.lv3Share)}% → ${pct(b.lv3Share)}%(${shareDir}), ` +
+        `${label(a)} → ${label(b)}: 3단계 방법이 든 기록 비율 ${pct(a.lv3Share)}% → ${pct(b.lv3Share)}%(${shareDir}), ` +
           `평균 깊이 ${f1(a.avgDepth)} → ${f1(b.avgDepth)}(${depthDir})` +
           (inb ? `, 앞 탐구를 이어받은 기록 ${inb}건` : '') +
-          (nb < 2 ? '. 기록이 1건이라 참고만 하세요' : '') +
-          yearOnlyNote(b),
+          (nb < 2 ? '. 기록이 1건이라 참고만 하세요' : ''),
       );
+      prev = b;
     }
     if (slots.length >= 3) {
       const a = slots[0];
@@ -366,9 +399,12 @@ export function buildGaps(recs: Rec[], links: Link[], S: StudentRecord): GapRepo
       const b = yearOnly(last) && slots.length >= 2 ? slots[slots.length - 2] : last;
       if (b !== a) {
         const dd = b.avgDepth - a.avgDepth;
-        const depthDir = Math.abs(dd) < 0.15 ? '비슷합니다' : dd > 0 ? '올라갔습니다' : '내려갔습니다';
         const to = f1(b.avgDepth);
-        trend.push(`전체 흐름: ${semLabel(a)}부터 ${semLabel(b)}까지 평균 깊이가 ${f1(a.avgDepth)}에서 ${to}${jo(to, '으로', '로')} ${depthDir}.`);
+        const move =
+          Math.abs(dd) < 0.15
+            ? `${f1(a.avgDepth)}에서 ${to}${jo(to, '으로', '로')} 큰 변화가 없습니다`
+            : `${f1(a.avgDepth)}에서 ${to}${jo(to, '으로', '로')} ${dd > 0 ? '올라갔습니다' : '내려갔습니다'}`;
+        trend.push(`전체 흐름: ${label(a)}부터 ${label(b)}까지 평균 깊이가 ${move}.`);
       }
     }
   }
@@ -398,8 +434,8 @@ export function buildGaps(recs: Rec[], links: Link[], S: StudentRecord): GapRepo
           lane: g.lane,
           method: miss[0],
           text:
-            `${laneName(g.lane)} 기록 ${g.recCount}건 가운데 진로 희망 분야(${hopeF.slice(0, 2).join(', ')})와 맞닿은 ` +
-            `${listJo(labels, '이', '가')} 드러난 기록이 없습니다. ${METHOD_TIP[miss[0]]}`,
+            `${missingSentence(laneName(g.lane), g.recCount, labels, `진로 희망 분야(${hopeF.slice(0, 2).join(', ')})와 이어지는 `)} ` +
+            METHOD_TIP[miss[0]],
         });
       } else if (g.expected.length && g.missing.length === g.expected.length) {
         const labels = g.expected.map((k) => METHOD[k].label);
@@ -419,20 +455,23 @@ export function buildGaps(recs: Rec[], links: Link[], S: StudentRecord): GapRepo
       tg: 'd',
       lane: g.lane,
       method: g.missing[0],
-      text: `${laneName(g.lane)} 기록 ${g.recCount}건 가운데 ${listJo(labels, '이', '가')} 드러난 기록이 없습니다. ${METHOD_TIP[g.missing[0]]}`,
+      text: `${missingSentence(laneName(g.lane), g.recCount, labels)} ${METHOD_TIP[g.missing[0]]}`,
     });
   }
 
   // 2) 학기 결손: 기록 2건 이상인데 3단계 방법이 하나도 없는 학기.
-  //    학기 구분 없는 기록만 있는 2학기 칸은 같은 기록이 1학기 칸에서 이미 판정되므로 건너뛴다.
+  //    학기 구분 없는 기록만 있는 2학기 칸은 같은 기록이 1학기 칸에서 이미 판정되므로 건너뛰고,
+  //    1학기 칸도 그런 기록만 있으면 '○학년 (학년 전체)'로 부른다.
   for (const st of slots) {
     if (st.recIds.length < 2 || st.lvCounts[2] > 0) continue;
-    if (st.sem === 2 && st.recIds.every((id) => byId.get(id)?.sem == null)) continue;
+    const allYearOnly = st.recIds.every((id) => byId.get(id)?.sem == null);
+    if (st.sem === 2 && allYearOnly) continue;
+    const where = allYearOnly ? `${st.year}학년 (학년 전체)` : semLabel(st);
     suggestions.push({
       tg: 'g',
       slot: st.slot,
       text:
-        `${semLabel(st)} 기록 ${st.recIds.length}건에 3단계 방법(직접 자료를 만들거나 분석하는 방법)이 하나도 없습니다. ` +
+        `${where} 기록 ${st.recIds.length}건에 3단계 방법(직접 자료를 만들거나 분석하는 방법)이 하나도 없습니다. ` +
         '이 학기 탐구가 조사와 정리에 머물렀는지 살펴보고, 다음 학기에는 측정이나 설문처럼 직접 자료를 만드는 활동을 하나 넣어 보도록 안내해 보세요.',
     });
   }

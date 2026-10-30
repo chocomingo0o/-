@@ -4,7 +4,7 @@ import { INQ_RX } from '../dict/patterns';
 import { sampleStudent } from '../../fixtures/sample';
 import { buildRecords, subjectStop } from './records';
 import { sentences, tokens } from './text';
-import { THEME_COLORS, buildStats, buildThemes, keywordFn } from './themes';
+import { MIN_EFFECTIVE_N, THEME_COLORS, buildStats, buildThemes, keywordFn } from './themes';
 
 /** 손으로 만든 기록. tf, ktf만 채우고 나머지는 비워 둔다. */
 function rec(id: string, lane: LaneKey, year: Year, tf: Record<string, number>, ktf: string[] = []): Rec {
@@ -47,10 +47,12 @@ describe('buildStats', () => {
     expect(st.kdf.get('효소')).toBeUndefined();
     expect(st.kdf.get('항생제')).toBe(1);
   });
-  it('idf = ln((N+1)/(df+0.5)). 없는 낱말은 df 0으로 계산한다', () => {
-    expect(st.idf('카탈레이스')).toBeCloseTo(Math.log(4 / 2.5), 10);
-    expect(st.idf('항생제')).toBeCloseTo(Math.log(4 / 1.5), 10);
-    expect(st.idf('없는낱말')).toBeCloseTo(Math.log(4 / 0.5), 10);
+  it('idf = ln((Neff+1)/(df+0.5)), Neff = max(N, 8). 없는 낱말은 df 0으로 계산한다', () => {
+    // 기록 3건이므로 Neff는 8(MIN_EFFECTIVE_N). 기록이 적어도 연결 점수가 문턱에 닿게 하기 위한 하한
+    expect(MIN_EFFECTIVE_N).toBe(8);
+    expect(st.idf('카탈레이스')).toBeCloseTo(Math.log(9 / 2.5), 10);
+    expect(st.idf('항생제')).toBeCloseTo(Math.log(9 / 1.5), 10);
+    expect(st.idf('없는낱말')).toBeCloseTo(Math.log(9 / 0.5), 10);
     // 모든 기록에 나와도 양수
     expect(st.idf('카탈레이스')).toBeGreaterThan(0);
   });
@@ -63,7 +65,7 @@ describe('buildStats', () => {
     const e = buildStats([]);
     expect(e.N).toBe(1);
     expect(e.df.size).toBe(0);
-    expect(e.idf('x')).toBeCloseTo(Math.log(2 / 0.5), 10);
+    expect(e.idf('x')).toBeCloseTo(Math.log(9 / 0.5), 10);
   });
 });
 
@@ -227,5 +229,34 @@ describe('buildThemes(sampleStudent()) - depth 모듈 없이 tokens로 tf/ktf를
     // 카탈레이스는 여러 기록의 핵심 문장에 걸치지만(kdf 2 이상) 기록 수의 30%는 넘지 않는다
     expect(st.kdf.get('카탈레이스') ?? 0).toBeGreaterThanOrEqual(2);
     expect(st.df.get('카탈레이스') ?? 0).toBeLessThanOrEqual(Math.max(4, st.N * 0.3));
+  });
+});
+
+/* ───────────────────────── 리뷰 뒤 보강 ───────────────────────── */
+describe('buildThemes: 겹침 합치기는 6개 제한과 무관하다', () => {
+  it('7번째 이후의 변형 낱말(포함 관계)도 기존 주제의 words에 들어간다', () => {
+    const recs: Rec[] = [];
+    const words = ['가나다', '라마바', '사아자', '차카타', '파하가', '나다라', '마바사'];
+    const lanes: LaneKey[] = ['과학', '수학', '영어', '국어', '사회', '동아리', '진로'];
+    words.forEach((w, i) => {
+      recs.push(rec(`A${i}`, lanes[i], 1, { [w]: 3 }, [w]));
+      recs.push(rec(`B${i}`, lanes[(i + 1) % lanes.length], 1, { [w]: 3 }, [w]));
+    });
+    // '항생제'(점수 가장 낮음)와 그것을 품은 '항생제내성'을 같은 두 기록에 둔다 → 합쳐져야 한다
+    recs.push(rec('X0', '과학', 1, { 항생제: 1, 항생제내성: 1 }, ['항생제', '항생제내성']));
+    recs.push(rec('X1', '영어', 1, { 항생제: 1, 항생제내성: 1 }, ['항생제', '항생제내성']));
+    const themes = buildThemes(recs, buildStats(recs));
+    expect(themes.length).toBeLessThanOrEqual(6);
+    const merged = themes.find((t) => t.words.includes('항생제') || t.words.includes('항생제내성'));
+    // 6개가 이미 찼더라도 포함 관계의 낱말은 같은 주제로 합쳐진다(둘 다 빠지는 일은 없다)
+    if (merged) expect(merged.words).toEqual(expect.arrayContaining(['항생제', '항생제내성']));
+  });
+  it("매우 흔한 낱말('반응', cw<0.5)은 관심 분야 낱말이 아니면 후보에서 뺀다", () => {
+    const a = rec('A', '과학', 1, { 반응: 3, 카탈레이스: 2 }, ['반응', '카탈레이스']);
+    const b = rec('B', '국어', 1, { 반응: 2, 카탈레이스: 2 }, ['반응', '카탈레이스']);
+    const c = rec('C', '수학', 2, { 반응: 2 }, ['반응']);
+    const names = buildThemes([a, b, c], buildStats([a, b, c])).map((t) => t.name);
+    expect(names).toContain('카탈레이스');
+    expect(names).not.toContain('반응');
   });
 });

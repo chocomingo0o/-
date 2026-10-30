@@ -24,11 +24,18 @@ export const nos = (s: string): string => (s ?? '').replace(/\s+/g, '');
 const END_CHARS = new Set(['.', '!', '?', '。']);
 const isDigit = (ch: string): boolean => ch >= '0' && ch <= '9';
 const isSpace = (ch: string): boolean => /\s/.test(ch);
+/** 닫는 따옴표(굽은 따옴표와 낫표). 곧은 따옴표(' ")는 여닫이에 모두 쓰이므로 따로 센다. */
+const CLOSE_QUOTES = new Set(['’', '”', '」', '』']);
+/** 닫는 따옴표 뒤에 이런 말이 바로 이어지면(‘…일까?’라는 의문) 인용이 문장 안에 든 것이다. */
+const QUOTE_CONT = /^(?:이?라는|이?라고|이?라며|하는|하고|하며|이라|라)/;
 
 /**
  * 본문을 문장으로 나눈다.
  * - `. ! ? 。` 가 문장 끝이다. 잇달아 나오면(…?!) 한 문장의 끝으로 본다.
  * - 숫자 사이의 마침표(3.5%, 7.0)는 소수점이므로 문장을 끊지 않는다.
+ * - 따옴표 안의 물음표·느낌표는 문장을 끊지 않는다. 문장 부호 바로 뒤에 닫는 따옴표가 오면 따옴표까지 문장에 넣고,
+ *   그 뒤에 '라는/이라는/하고' 같은 말이 띄어쓰기 없이 이어지면(‘…일까?’라는 의문을 품고) 같은 문장으로 계속한다.
+ *   곧은 따옴표(' ")는 현재 문장 안에 홀수 개 있을 때만 닫는 따옴표로 본다.
  * - 돌려주는 s는 앞뒤 공백을 뗀 문장이고, a와 b는 그 문장이 원문에서 차지하는 구간이다
  *   (text.slice(a, b) === s). 하이라이트 위치 계산에 쓴다.
  */
@@ -49,6 +56,15 @@ export function sentences(text: string): { s: string; a: number; b: number }[] {
       // 잇달은 문장 부호를 모두 끝에 포함
       let j = i;
       while (j < n && END_CHARS.has(t[j])) j++;
+      // 바로 뒤의 닫는 따옴표도 이 문장에 넣는다
+      if (j < n && isClosingQuote(t, start, j)) {
+        j++;
+        // 따옴표 뒤에 '라는 의문', '하고 말함'처럼 붙어 이어지면 끊지 않는다
+        if (j < n && !isSpace(t[j]) && QUOTE_CONT.test(t.slice(j, j + 4))) {
+          i = j;
+          continue;
+        }
+      }
       push(start, j);
       start = j;
       i = j;
@@ -58,6 +74,16 @@ export function sentences(text: string): { s: string; a: number; b: number }[] {
   }
   if (start < n) push(start, n);
   return out;
+
+  /** t[j]가 닫는 따옴표인지. 곧은 따옴표는 현재 문장 안에 짝이 열려 있을 때(홀수 개)만 닫는 것으로 본다. */
+  function isClosingQuote(src: string, from: number, j: number): boolean {
+    const q = src[j];
+    if (CLOSE_QUOTES.has(q)) return true;
+    if (q !== "'" && q !== '"') return false;
+    let cnt = 0;
+    for (let k = from; k < j; k++) if (src[k] === q) cnt++;
+    return cnt % 2 === 1;
+  }
 
   function push(a0: number, b0: number): void {
     let a = a0;
@@ -79,6 +105,14 @@ const PUNCT = /[‘’'“”"『』「」()\[\]{}<>〈〉《》·,.!?:;~\/\-–
 
 /** 조사 하나만 떼어도 되는 1글자 조사(남는 글자가 1자 이상이면 뗀다). 그 외는 2자 이상 남아야 뗀다. */
 const SHORT_JOSA = new Set(['을', '를', '의', '과', '와', '가', '에']);
+
+/**
+ * 어미를 뗀 뒤 남은 어간이 이런 글자로 끝나면 용언이다('줄이는'→'줄이', '지키는'→'지키', '모르는'→'모르', '맞추어'→'맞추').
+ * '리'는 넣지 않는다(원리, 거리, 소리처럼 '리'로 끝나는 명사가 너무 많다). 명사 예외는 NOUN_OK(높이, 길이, 종이 …)로 거른다.
+ */
+const STEM_END = /(?:이|히|우|추|르|키|치)$/;
+/** 이 어미가 떨어진 뒤에만 STEM_END 검사를 한다(명사 뒤의 조사 '를', '의'가 떨어진 경우와 구분). */
+const VERB_SUFFIX = /(?:는|고|며|면|서|어|아|여|던|니|자|게|도록|면서|지만|려고|으며)$/;
 
 /**
  * 낱말 하나에서 조사·어미를 한 번 뗀다. 긴 조사부터 대조한다(SUF는 길이 내림차순).
@@ -136,6 +170,10 @@ export function tokens(text: string, extraStop?: Set<string>): string[] {
     if (/^[가-힣]+$/.test(t) && !NOUN_OK.has(t)) {
       if (VERB_END.test(t)) continue;
       if (/(?:하|되)$/.test(t)) continue;
+      // 어미('는', '고', '어' …)를 떼고 남은 어간이 이/히/우/추/르/키/치로 끝나면 용언('줄이는', '지키고', '모르는')
+      if (t !== w && VERB_SUFFIX.test(w) && STEM_END.test(t)) continue;
+      // 두 글자 관형형('전한', '강한')과 조사를 뗀 뒤 남은 '…한'은 용언. 명사 예외(제한, 극한 …)는 NOUN_OK에 있다
+      if (t.length === 2 && /한$/.test(t)) continue;
     }
     out.push(t);
   }
@@ -152,7 +190,8 @@ export function tokens(text: string, extraStop?: Set<string>): string[] {
  * - max(기본 90자)를 넘으면 낱말 경계(공백이나 쉼표)에서 잘라 '…'를 붙인다.
  */
 export function summarize(s: string, max: number = 90): string {
-  let t = (s ?? '').replace(/^\s*\(\d학기\)\s*/, '').trim();
+  // 공백을 한 칸으로 접는다. 입력 계약(파서·직접 입력)과 같은 꼴이고, EVAL_TAIL이 긴 공백에서 느려지는 것을 막는다.
+  let t = (s ?? '').replace(/\s+/g, ' ').replace(/^\s*\(\d학기\)\s*/, '').trim();
   t = t.replace(/^[)\]\s,.·'’”]+/, '');
   t = t.replace(LEAD_ADVERBS, '');
   const noTail = t.replace(EVAL_TAIL, '').trim();
@@ -168,8 +207,32 @@ export function summarize(s: string, max: number = 90): string {
 
 /* ───────────────────────── 주제 문구 ───────────────────────── */
 
-/** 주제 문구가 이런 어미·조사로 끝나면 문장 조각이므로 주제로 쓰지 않는다. */
-const BAD_END = /(?:함|음|임|됨|며|고|여|해|하는|하여|한|된|던|을|를|의|에|에서|으로|로|와|과|및|등|이며|하고|위해|통해)$/;
+/**
+ * 주제 문구가 이런 어미·조사로 끝나면 문장 조각이므로 주제로 쓰지 않는다.
+ * '과'는 '효과', '성과', '교과', '인과'처럼 명사의 끝 글자이기도 하므로 그 앞 글자가 효·성·교·인·통이면 조사로 보지 않는다.
+ */
+const BAD_END = /(?:함|음|임|됨|며|고|여|해|하는|하여|한|된|던|을|를|의|에|에서|으로|로|와|(?<![효성교인통])과|및|등|이며|하고|위해|통해)$/;
+
+/** 어절 사이에 이런 연결 어미로 끝나는 말이 있으면 명사구가 아니라 절이다('비교 횟수를 세어 효율 차이', '장단을 쳐 보며 구조'). */
+const CONNECTIVE_WORD = /^[가-힣]+(?:어|아|여|며|고|서|려|해)$/;
+/** 첫 어절이 이런 조사로 끝나고 뒤에 '따른', '대한', '미치는' 같은 관형어가 오지 않으면 부사어로 시작하는 조각이다('학기 말에 …'). */
+const LEAD_ADVERBIAL = /^[가-힣A-Za-z0-9]+(?:에서|에|로|으로|부터)$/;
+const LEAD_ADVERBIAL_OK = /^(?:따른|따라|대한|관한|관련|미치는|의한|주는|대해|비해|비한|이르는|가까운)/;
+
+/**
+ * 어절 가운데 연결 어미로 끝나는 말('세어', '쳐', '보며', '말아')이 끼어 있어 명사구가 아닌 절인지.
+ * 명사 예외(영어, 국어, 참여, 사고, 문서 …)는 NOUN_OK로 거른다. 마지막 어절은 BAD_END가 따로 본다.
+ */
+export function clauseBroken(p: string): boolean {
+  const words = (p ?? '').trim().split(/\s+/);
+  if (words.length < 2) return false;
+  if (LEAD_ADVERBIAL.test(words[0]) && !LEAD_ADVERBIAL_OK.test(words[1] ?? '')) return true;
+  for (let i = 1; i < words.length - 1; i++) {
+    const w = words[i];
+    if (CONNECTIVE_WORD.test(w) && !NOUN_OK.has(w)) return true;
+  }
+  return false;
+}
 
 /** 이런 일반 명사로 끝나면 주제가 아니라 활동 설명이다('…한 내용', '…한 결과'). */
 const BAD_TAIL_NOUN = /(?:내용|결과|과정|자료|방법|활동|틀|부분|점|것|모습|태도|역할|경우|사례들)$/;
@@ -213,6 +276,7 @@ export function validTopic(p: string): boolean {
   if (/^(?:팀원|친구|모둠원|조원)/.test(t)) return false;
   if (/^(?:수|것|점|등|및)\s/.test(t)) return false;
   if (/^(?:이|그|저|이를|이에|또한|특히|이후|나아가|더불어)\s/.test(t)) return false;
+  if (clauseBroken(t)) return false;
   return true;
 }
 
@@ -223,8 +287,16 @@ export function stripAuthor(q: string): string {
 
 /* ───────────────────────── 조사 고르기 ───────────────────────── */
 
-/** 숫자로 끝나는 낱말의 받침(한글 읽기 기준). 0 영(ㅇ) 1 일(ㄹ) 2 이 3 삼(ㅁ) 4 사 5 오 6 육(ㄱ) 7 칠(ㄹ) 8 팔(ㄹ) 9 구 */
-const DIGIT_FINAL: Record<string, number> = { '0': 21, '1': 8, '2': 0, '3': 16, '4': 0, '5': 0, '6': 1, '7': 8, '8': 8, '9': 0 };
+/**
+ * 숫자로 끝나는 낱말의 받침(한글 읽기 기준). 0 영(ㅇ) 1 일(ㄹ) 2 이 3 삼(ㅁ) 4 사 5 오 6 육(ㄱ) 7 칠(ㄹ) 8 팔(ㄹ) 9 구
+ * 과목명 끝의 로마 숫자 Ⅰ(일) Ⅱ(이) Ⅲ(삼)도 같은 식으로 읽는다.
+ */
+const DIGIT_FINAL: Record<string, number> = {
+  '0': 21, '1': 8, '2': 0, '3': 16, '4': 0, '5': 0, '6': 1, '7': 8, '8': 8, '9': 0,
+  'Ⅰ': 8, 'Ⅱ': 0, 'Ⅲ': 16,
+};
+/** 한글 뒤에 영문 I, II, III가 붙은 과목명('영어I', '물리학II')은 로마 숫자로 읽는다. 'AI'처럼 영문 낱말의 I는 해당하지 않는다. */
+const ROMAN_ASCII = /[가-힣](III|II|I)$/;
 
 /**
  * 받침에 따라 조사를 고른다. a는 받침 있을 때, b는 받침 없을 때 쓰는 꼴.
@@ -234,9 +306,10 @@ const DIGIT_FINAL: Record<string, number> = { '0': 21, '1': 8, '2': 0, '3': 16, 
 export function jo(word: string, a: string, b: string): string {
   const w = (word ?? '').replace(/[\s’”"'」』)\]]+$/, '');
   if (!w) return b;
-  const last = w[w.length - 1];
+  const roman = ROMAN_ASCII.exec(w);
+  const last = roman ? ({ I: 'Ⅰ', II: 'Ⅱ', III: 'Ⅲ' } as Record<string, string>)[roman[1]] : w[w.length - 1];
   let final: number;
-  if (last in DIGIT_FINAL) {
+  if (Object.prototype.hasOwnProperty.call(DIGIT_FINAL, last)) {
     final = DIGIT_FINAL[last];
   } else {
     const c = last.charCodeAt(0) - 0xac00;

@@ -4,13 +4,14 @@
  * - buildCtx(S, userDict) : 사전을 한 번 컴파일해 분석 문맥(Ctx)을 만든다. 학생 한 명을 분석할 때 한 번만 만들어 모든 기록에 돌려 쓴다.
  * - analyzeRecord(r, ctx) : Rec의 분석 필드(sents, methods, methodCounts, depth, key, acts, fuCount, faint,
  *                           connectCue, tf, ktf, fields, skills, skillCounts)를 채운다. 같은 기록에 다시 불러도 결과가 같다.
- * - DEPTH_TXT             : 깊이 이름. 1 정리·참여 / 2 조사·분석 / 3 분석·실험 / 4 성찰·확장
+ * - DEPTH_TXT             : 깊이 이름. 1 정리·참여 / 2 조사·분석 / 3 실험·자료 생산 / 4 성찰·확장
  *
  * 규칙(설계 명세 4.3)
  *  문장마다
  *   ms = 방법 탐지 결과. 평가 문장이면 '개념 분석·해석(analysis)', '개념 이해·정리(understanding)'는 뺀다.
  *        평가 문장 = EVAL_SENT에 맞거나, 평가 어휘(EVAL_WORDS)가 있고 행위 동사(ACTION_VERBS)가 없는 문장.
- *        문장 전체가 평가(EVAL_SENT)이면서 행위 동사도 없으면('비판적 사고력이 돋보임.') 활동이 전혀 없으므로 방법을 모두 뺀다.
+ *        문장 전체가 평가(EVAL_SENT)이면서 행위 동사도 없으면('비판적 사고력이 돋보임.') 평가 어휘에 걸린 1·2단계 방법
+ *        (비판→비교·비평, 사고→개념 분석·해석 등)은 모두 빼고, 직접 활동의 근거가 분명한 3단계 방법만 남긴다.
  *   rf = 성찰 단서(한계, 오차, 개선, 재실험 …)가 있는지
  *   sc = Σ(방법: 3단계면 2, 아니면 1) + (rf면 2) + (탐구 동사 있으면 1) + (따옴표 있으면 0.5)
  *   fu = 첫 문장이 아니고, 후속 단서(더 나아가, 추가로 탐구, 궁금해져 …)가 있고, sc>=1 또는 탐구 동사가 있음
@@ -40,8 +41,12 @@ import { subjectStop } from './records';
 
 /* ───────────────────────── 깊이 이름 ───────────────────────── */
 
-/** 깊이 1~4의 이름. 0번은 비워 두어 DEPTH_TXT[r.depth]로 바로 쓴다. */
-export const DEPTH_TXT: readonly string[] = ['', '정리·참여', '조사·분석', '분석·실험', '성찰·확장'];
+/**
+ * 깊이 1~4의 이름. 0번은 비워 두어 DEPTH_TXT[r.depth]로 바로 쓴다.
+ * 3단계는 '분석·실험'이 아니라 '실험·자료 생산'으로 적어 2단계 '조사·분석'과 이름만으로 구별되게 한다
+ * (3단계 = 실험·설문·코딩·제작처럼 직접 자료를 만들거나 데이터를 분석하는 방법이 있음).
+ */
+export const DEPTH_TXT: readonly string[] = ['', '정리·참여', '조사·분석', '실험·자료 생산', '성찰·확장'];
 
 /* ───────────────────────── 분석 문맥 ───────────────────────── */
 
@@ -96,9 +101,11 @@ const lvOf = (k: MethodKey): number => METHOD[k].lv;
  *  - 'none'  : 평가 문장이 아니다. 방법을 그대로 둔다.
  *  - 'soft'  : 평가 어휘가 섞인 문장. '개념 이해·정리', '개념 분석·해석'만 뺀다.
  *              (EVAL_SENT에 맞지만 행위 동사가 있는 '실험 결과를 꼼꼼히 기록하는 태도가 돋보임.'도 여기. 실험·기록은 활동이다.)
- *  - 'whole' : 문장 전체가 평가이고(EVAL_SENT) 행위 동사가 없다('비판적 사고력이 돋보임.'). 활동이 없으므로 방법을 모두 뺀다.
- *              '비판', '사고' 같은 낱말이 사전에 걸려도 여기서 걸러진다.
- * 행위 동사 = 실험, 측정, 조사, 분석, 설문, 제작, 설계, 코딩, 읽고, 탐구하, 비교하, 작성하, 발표하, 제안하, 관찰, 모델링 (dict/patterns.ts의 ACTION_VERBS)
+ *  - 'whole' : 문장 전체가 평가이고(EVAL_SENT) 행위 동사가 없다('비판적 사고력이 돋보임.'). 평가 어휘에 걸린
+ *              1·2단계 방법('비판'→비교·비평, '사고'→개념 분석·해석)은 모두 빼고, 3단계 방법만 남긴다
+ *              (3단계 표현은 '시제품을 제작', '설문을 실시'처럼 구체적인 활동이라 평가 어휘와 헷갈릴 일이 적다).
+ * 행위 동사 = 실험, 측정, 조사, 분석, 설문, 제작, 설계, 코딩, 읽고, 탐구하, 비교하, 작성하, 발표하, 제안하, 관찰, 모델링, 만들, 구현 …
+ * (dict/patterns.ts의 ACTION_VERBS)
  */
 function evalKind(s: string, ctx: Ctx): 'none' | 'soft' | 'whole' {
   const t = s.trim();
@@ -131,7 +138,7 @@ function scoreSentence(o: { s: string; a: number; b: number }, i: number, ctx: C
   let ms = methodHits(o.s, ctx.methods);
   if (ms.length) {
     const ek = evalKind(o.s, ctx);
-    if (ek === 'whole') ms = [];
+    if (ek === 'whole') ms = ms.filter((k) => lvOf(k) >= 3);
     else if (ek === 'soft') ms = ms.filter((k) => !EVAL_DROP.has(k));
   }
   const rf = hit(ctx.reflect, o.s);

@@ -56,7 +56,12 @@ describe('기대 방법(결손 분석 기준)', () => {
     has('영어', ['reading', 'critique', 'discussion']);
     has('정보·기술', ['coding', 'data', 'making']);
     has('예체능', ['performance', 'making']);
-    for (const k of ['진로', '동아리', '자율·자치'] as LaneKey[]) has(k, ['making', 'survey', 'fieldtrip', 'experiment']);
+    // 창체 줄은 영역 성격에 맞게 나눈다. 학급 자치 활동에 변인 통제 실험을 기대하지 않는다
+    has('동아리', ['experiment', 'making', 'survey', 'fieldtrip']);
+    has('진로', ['fieldtrip', 'survey']);
+    has('자율·자치', ['survey', 'proposal']);
+    expect(LANE['자율·자치'].expected).not.toContain('experiment');
+    expect(LANE['진로'].expected).not.toContain('experiment');
   });
 });
 

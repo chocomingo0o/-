@@ -69,8 +69,8 @@ export function subjectStop(S: StudentRecord): Set<string> {
       }
     }
   };
-  for (const c of S.courses) add(c.name);
-  for (const s of S.seteuk) for (const n of s.names) add(n);
+  for (const c of S.courses ?? []) add(c.name);
+  for (const s of S.seteuk ?? []) for (const n of s.names ?? []) add(n);
   return out;
 }
 
@@ -107,9 +107,9 @@ function emptyRec(base: Pick<Rec, 'id' | 'kind' | 'subj' | 'lane' | 'year' | 'se
 /** 세특 1건에 해당하는 성적표 줄들(같은 학년, 이름 일치). 이름 순서는 세특의 names 순서를 따른다. */
 function coursesOf(S: StudentRecord, s: Seteuk): Course[] {
   const out: Course[] = [];
-  for (const n of s.names) {
+  for (const n of s.names ?? []) {
     const k = keyName(n);
-    for (const c of S.courses) if (c.year === s.year && keyName(c.name) === k) out.push(c);
+    for (const c of S.courses ?? []) if (c.year === s.year && keyName(c.name) === k) out.push(c);
   }
   return out;
 }
@@ -136,9 +136,16 @@ function gradeChips(cs: Course[], sem: Sem | null): GradeChip[] {
   return out;
 }
 
-/** 창체 영역 이름에서 카드 제목을 만든다. 끝의 '(34시간)' 같은 시간 표시는 뗀다(hours 필드에 따로 있음). */
+/**
+ * 창체 영역 이름에서 카드 제목을 만든다. 끝의 '(34시간)' 같은 시간 표시는 뗀다(hours 필드에 따로 있음).
+ * '동아리활동 (생명과학탐구반)'처럼 괄호 앞에 띄어쓰기가 있으면 붙여서 '동아리활동(생명과학탐구반)'으로 쓴다
+ * (문장 안에서 '2학년 (학년 전체) 동아리활동 (미생물탐구반)'처럼 괄호가 잇달아 읽기 어려워지는 것을 막는다).
+ */
 function areaTitle(area: string): string {
-  const t = (area ?? '').replace(/\(\s*\d+\s*시간\s*\)\s*$/, '').trim();
+  const t = (area ?? '')
+    .replace(/\(\s*\d+\s*시간\s*\)\s*$/, '')
+    .replace(/\s+\(/g, '(')
+    .trim();
   return t || '창체';
 }
 
@@ -146,6 +153,7 @@ function areaTitle(area: string): string {
  * 세특과 창체를 Rec으로 바꾼다.
  * - 본문이 12자 미만이면 기록으로 세지 않는다. 학년은 1~3만.
  * - 세특: 이름이 성적표와 맞으면 성적표의 표기(공백 포함)를 카드 이름으로 쓰고, 여러 과목이면 '·'로 잇는다.
+ *   names, courses, changche, seteuk 배열이 빠진 작업 파일(.json)이 들어와도 예외 없이 빈 배열로 다룬다.
  *   학기가 없으면 해당 과목 성적표의 학기가 하나뿐일 때 그 학기를 쓴다.
  *   교과군은 성적표의 교과(group)와 과목명으로 판정하고, 자율적 교육과정은 '융합(자율과정)'.
  * - 창체: 학기 없음(sem null), 교과군은 영역 이름으로 판정(동아리/진로/자율·자치).
@@ -155,15 +163,15 @@ export function buildRecords(S: StudentRecord): Rec[] {
   const recs: Rec[] = [];
   const okYear = (y: number): y is Year => y === 1 || y === 2 || y === 3;
 
-  S.seteuk.forEach((s, i) => {
+  (S.seteuk ?? []).forEach((s, i) => {
     if (!s.text || s.text.trim().length < 12) return;
     if (!okYear(s.year)) return;
-    const names = s.names.length ? s.names : ['(과목 미확인)'];
+    const names = s.names?.length ? s.names : ['(과목 미확인)'];
     const cs = coursesOf(S, s);
     const subj = names
       .map((n) => {
         const k = keyName(n);
-        const c = S.courses.find((x) => keyName(x.name) === k);
+        const c = (S.courses ?? []).find((x) => keyName(x.name) === k);
         return c ? c.name : n;
       })
       .join('·');
@@ -187,7 +195,7 @@ export function buildRecords(S: StudentRecord): Rec[] {
     );
   });
 
-  S.changche.forEach((c, i) => {
+  (S.changche ?? []).forEach((c, i) => {
     if (!c.text || c.text.trim().length < 12) return;
     if (!okYear(c.year)) return;
     recs.push(

@@ -81,12 +81,17 @@ function userTerm(t: string): string {
   return escapeRegExp(t.trim()).replace(/\s+/g, '\\s*');
 }
 
-/** 사전 17종과 교사 추가 표현을 합쳐 컴파일한다. 알 수 없는 키나 빈 표현은 무시한다. */
+/** 교사 추가 표현으로 쓸 수 있는지. 공백을 뺀 길이가 2자 이상이어야 한다('측' 한 글자는 측정·예측·추측 어디에나 걸린다). */
+export function isUsableUserTerm(x: unknown): x is string {
+  return typeof x === 'string' && x.replace(/\s+/g, '').length >= 2;
+}
+
+/** 사전 17종과 교사 추가 표현을 합쳐 컴파일한다. 알 수 없는 키, 빈 표현, 한 글자 표현은 무시한다. */
 export function compileMethods(userDict?: UserDict): CompiledMethod[] {
   const ud: Partial<Record<string, unknown>> = (userDict ?? {}) as Partial<Record<string, unknown>>;
   return METHODS.map((def) => {
     const raw = ud[def.key];
-    const terms = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string' && x.trim().length > 0) : [];
+    const terms = Array.isArray(raw) ? raw.filter(isUsableUserTerm) : [];
     return {
       def,
       re: new RegExp('(?:' + def.terms.join('|') + ')', 'g'),
@@ -179,11 +184,15 @@ export function skillMarks(text: string, skills: CompiledSkill[]): { a: number; 
 /**
  * 분야별 정규식. 낱말의 글자 사이에 \s*를 넣어 '항생제 내성'과 '항생제내성'을 같게 본다.
  * 긴 낱말을 앞에 두어 같은 자리에서는 긴 낱말이 먼저 맞는다('화학반응'이 '화학'보다 먼저).
+ * 두 글자 낱말('내과', '안과')은 글자 사이 공백을 허용하지 않고 앞에 한글이 붙어 있으면 맞지 않게 한다.
+ * 그렇지 않으면 '국내 과학'에서 '내과'가, '소아과학'에서 '아과'가 걸린다.
  */
 export function compileFields(): { k: string; re: RegExp }[] {
   return FIELD_KEYS.map((k) => {
     const words = (FIELDS[k] ?? []).filter((w) => w && w.length >= 2).slice().sort((x, y) => y.length - x.length);
-    const parts = words.map((w) => w.split('').map(escapeRegExp).join('\\s*'));
+    const parts = words.map((w) =>
+      w.length === 2 ? '(?<![가-힣])' + escapeRegExp(w) : w.split('').map(escapeRegExp).join('\\s*'),
+    );
     return { k, re: new RegExp('(?:' + parts.join('|') + ')', 'g') };
   });
 }

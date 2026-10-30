@@ -79,3 +79,48 @@ describe('탐구 방법 사전', () => {
     expect(m.lv).toBe(3);
   });
 });
+
+/* ───────────────────────── 리뷰에서 찾은 오탐(맨 명사 항목) ───────────────────────── */
+describe('맨 명사 항목이 설명·조사 문장을 3단계 방법으로 잡지 않는다', () => {
+  it("'논설문'은 설문이 아니다(앞에 한글이 붙은 설문)", () => {
+    expect(hits('환경 문제를 주제로 논설문을 작성하고 근거 자료를 조사함.')).not.toContain('survey');
+    expect(hits('해설문을 읽고 요약함.')).not.toContain('survey');
+    expect(hits('학급 친구들에게 설문을 실시함.')).toContain('survey');
+    expect(hits('설문지를 만들어 배포함.')).toContain('survey');
+  });
+  it("'실험'은 수행 어미·목적어가 붙은 꼴만 실험이다", () => {
+    expect(hits('실험 기록을 꼼꼼히 남기는 습관이 연구자에게 중요하다는 점을 소감문에 적음.')).not.toContain('experiment');
+    expect(hits('1학년 때 수행했던 온도에 따른 카탈레이스 활성 실험의 결과를 다시 꺼내어 설명함.')).not.toContain('experiment');
+    expect(hits('과일 전지의 전압에 영향을 주는 요인을 주제로 모둠 실험을 설계함.')).toContain('experiment');
+    expect(hits('중화 적정 실험에 참여하여 지시약의 색 변화를 관찰함.')).toContain('experiment');
+    expect(hits('온도를 달리하여 3회 반복 측정함.')).toContain('experiment');
+  });
+  it('직업 설명과 계획·바람의 배양·실험은 활동이 아니다', () => {
+    expect(hits('미생물학 연구원을 조사하여 세균, 바이러스, 곰팡이를 배양하고 분석하는 일을 발표 자료로 정리함.')).not.toContain('experiment');
+    expect(hits('2학년에는 미생물을 직접 배양하는 탐구를 해 보겠다는 계획을 세움.')).not.toContain('experiment');
+    expect(hits('미생물 배양 실험을 더 배우고 싶다는 바람을 적음.')).not.toContain('experiment');
+    expect(hits('손바닥을 면봉으로 닦아 영양 한천 배지에 펴 바른 뒤 세균을 배양함.')).toContain('experiment');
+  });
+  it('인터뷰를 듣거나 매체의 인터뷰를 분석한 것, 구술 자료를 읽은 것은 면담이 아니다', () => {
+    expect(hits('과학자 인터뷰를 듣고 화자의 의견과 사실을 구분하는 활동을 수행함.')).not.toContain('survey');
+    expect(hits('같은 소식을 전한 두 매체의 보도 분량과 인터뷰 대상이 다른 까닭을 분석함.')).not.toContain('survey');
+    expect(hits('6·25 전쟁 피란민의 구술 자료를 읽고 교과서 서술과 비교함.')).not.toContain('survey');
+    expect(hits('현직 연구원을 인터뷰하여 하루 일과를 정리함.')).toContain('survey');
+    expect(hits('어르신을 찾아가 전쟁 경험담을 듣고 구술 채록을 남김.')).toContain('survey');
+  });
+  it("'연표로 정리', 함수 '그래프를 그려 설명', 개념 비교표는 데이터 분석이 아니다", () => {
+    expect(hits('훈민정음 창제 과정을 조사해 집현전 학자들의 역할을 연표로 정리함.')).not.toContain('data');
+    expect(hits('판별식의 부호에 따라 교점 개수가 달라지는 이유를 그래프를 그려 설명하는 발표를 맡음.')).not.toContain('data');
+    expect(hits('두 학과의 교육과정을 비교하여 공통 과목과 차이를 표로 정리함.')).not.toContain('data');
+    expect(hits('각 조건을 3회 반복 측정하여 평균을 표로 정리함.')).toContain('data');
+    expect(hits('체력 측정 결과를 그래프로 그려 약한 요소를 찾음.')).toContain('data');
+  });
+  it("과산화수소·카탈레이스·pH는 다루는 동작이 붙어야 실험이고, '예를 직접 만들어 제시'와 '학급 전시회'는 제작·탐방이 아니다", () => {
+    expect(hits('과산화수소 분해 반응의 산화수 변화를 따져 산소 원자가 산화와 환원을 동시에 겪는 반응임을 설명함.')).not.toContain('experiment');
+    expect(hits('온도와 pH가 모두 효소 단백질의 구조에 영향을 준다는 점으로 일반화함.')).not.toContain('experiment');
+    expect(hits('생간 조각을 과산화수소수에 넣어 기포 발생을 관찰함.')).toContain('experiment');
+    expect(hits('행렬의 곱셈이 교환법칙을 만족하지 않는 예를 직접 만들어 제시함.')).not.toContain('making');
+    expect(hits('학급 전시회에서 친구들의 작품에 짧은 감상평을 남기는 활동에 참여함.')).not.toContain('fieldtrip');
+    expect(hits('과학관을 방문하여 전시를 관람함.')).toContain('fieldtrip');
+  });
+});

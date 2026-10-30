@@ -13,7 +13,8 @@
  *     strongW = cw 0.6 이상인 공유 낱말 수(흔하지 않은 낱말)
  *     inKey   = 한쪽 핵심 문장에 있는 공유 낱말 수(cw 0.45 이상)
  *     bothKey = 양쪽 핵심 문장에 모두 있는 공유 낱말 수(cw 0.45 이상)
- *   cite  : 뒤 기록 본문에 '{a.year}학년 (때|에|의)? {a 과목명}'이 있으면 +8 (공유 낱말이 없으면 과목명을 넣는다)
+ *   cite  : 뒤 기록 본문에 '{a.year}학년 (때|에)? {a 과목명} (시간|수업|에서|때 …)'이 있으면 +8 (공유 낱말이 없으면 과목명을 넣는다)
+ *           과목명 뒤에 수업 맥락이 있어야 한다. '1학년의 정보를 바탕으로'의 '정보'는 과목이 아니다
  *   ss    : 둘 다 세특이고 과목 기본형(숫자·Ⅰ·Ⅱ 제거)이 같음
  *   cc    : 교과 ↔ 창체, 또는 서로 다른 창체 영역
  *   공유 낱말이 없거나 (inKey가 0이고 ss도 아님)이면 탈락
@@ -24,15 +25,18 @@
  *             또는 진로 희망 일치이고 strongW>=1이고 공유 2개 이상
  *   strong2 = strong, 또는 (ss이고 strongW>=1), 또는 (cc이고 strongW>=1이고 공유 2개 이상이고 inKey>=1)
  *   cite도 ss도 아니면 bothKey>=1, 또는 (관심 분야가 같고 inKey>=2), 또는 (관심 분야가 같고 진로 희망 일치)가 있어야 한다
- *   점수 문턱: cite가 아니면 sc >= (ss 2.5 | cc 4 | 그 외 5). ss는 통과 후 +3
+ *   점수 문턱: cite가 아니면 sc >= (ss 2.5 | cc 4 | 그 외 5). ss는 통과 후 +3(같은 과목의 후속 기록을 순위에서 앞세움)
  *
  * 유지 규칙(뒤 기록 b 하나에 대해)
- *   앞선 후보(seq): 점수 1위 + (cite, ss, cc이면서 1위의 55% 이상, 또는 1위의 75% 이상)를 최대 3개
+ *   앞선 후보(seq): 점수 1위 + (cite 또는 ss는 점수와 무관하게, cc는 1위의 55% 이상, 그 외는 1위의 75% 이상)를 최대 3개
+ *   (직접 언급과 같은 과목의 후속 기록은 점수가 낮아도 교사가 보고 싶은 연결이므로 남긴다)
  *   같은 시기 후보(con, 다른 교과군만): 점수 (cc 4 | 6) 이상을 창체면 2개, 아니면 1개
  *
  * 연결 종류
  *   같은 시기면 동시. 깊이가 오르거나 최고 방법 수준이 오르면 심화. 교과군이 바뀌면 확장.
- *   새 방법(2단계 이상)이 있으면 전환. 그 외 반복.
+ *   새 방법(2단계 이상)이 있으면 전환. 그 외 반복. 심화가 아닌 종류는 깊이가 내려간 경우도 품는다(설명 문장에 적는다).
+ *
+ * 설명 문장의 구분자: 낱말 나열은 ', ', 항목 구분은 ' / '. 가운뎃점(·)은 방법 이름 같은 고유 라벨에만 쓴다.
  *
  * 정규식은 test()에만 쓰므로 'g' 없이 만든다. 이 파일은 DOM에 의존하지 않는다.
  */
@@ -63,14 +67,14 @@ export const LINK_KINDS: Record<LinkKind, { color: string; colorDark: string; cl
     color: '#2f8f57',
     colorDark: '#3faa6b',
     cls: 'shift',
-    desc: '같은 주제를 다른 방법으로 다룸(깊이는 비슷함)',
-    hint: '방법만 바뀌고 깊이는 그대로입니다. 앞 탐구의 결과를 뒤 탐구에서 실제로 썼는지 확인해 보세요.',
+    desc: '같은 주제를 다른 방법으로 다룸(깊이는 올라가지 않음)',
+    hint: '방법은 바뀌었지만 깊이가 올라가지 않았습니다. 앞 탐구의 결과를 뒤 탐구에서 실제로 썼는지 확인해 보세요.',
   },
   반복: {
     color: '#c48f0a',
     colorDark: '#d7a52a',
     cls: 'rep',
-    desc: '주제는 이어지지만 질문과 방법이 발전하지 않음',
+    desc: '주제는 이어지지만 방법과 깊이가 나아가지 않음',
     hint: '주제만 되풀이되고 있습니다. 다음 탐구에서는 실험·측정, 데이터 분석, 설문처럼 직접 근거를 만드는 방법이나 한계를 짚는 단계를 넣어 보도록 안내해 보세요.',
   },
   동시: {
@@ -116,8 +120,16 @@ function baseOf(r: Rec): string {
 }
 
 /**
+ * 과목명 뒤에 와야 하는 수업 맥락(공백을 뺀 본문에 적용). '1학년 때 과학탐구실험1 시간에', '1학년 때 통합과학2에서 조사했던',
+ * '1학년 정보 수업에서'. '정보', '화학', '문학'처럼 일반 명사와 같은 과목명이 '1학년의 정보를 바탕으로',
+ * '2학년 화학 반응의 세계 수업에서'처럼 과목 아닌 쓰임에 걸리지 않게 한다.
+ */
+const CITE_AFTER =
+  '(?:시간|수업|때|에서|세특|과목|실험|탐구|활동|발표|보고서|수행평가|프로젝트|단원|의(?:탐구|실험|활동|수업|시간|발표|보고서))';
+
+/**
  * 뒤 기록 본문(공백 제거)에서 앞 기록을 직접 언급하는 꼴을 찾는 정규식.
- * '{학년}학년 (1학기|2학기)? (때|에|의)? {과목명}'. 과목명은 원래 이름('과학탐구실험1')과
+ * '{학년}학년 (1학기|2학기)? (때|에)? {과목명} {수업 맥락}'. 과목명은 원래 이름('과학탐구실험1')과
  * 기본형('과학탐구실험') 둘 다 잡되, 기본형 뒤에 다른 숫자가 붙으면('통합과학2'는 통합과학1이 아님) 잡지 않는다.
  * 세특이 아니거나 과목명이 너무 짧으면 null.
  */
@@ -132,7 +144,7 @@ function citeRegex(a: Rec): RegExp | null {
     alts.push(esc(base) + '(?![0-9０-９ⅠⅡⅢ])');
   }
   if (!alts.length) return null;
-  return new RegExp(`${a.year}학년(?:[12]학기)?(?:때의|때|에|의)?(?:${alts.join('|')})`);
+  return new RegExp(`${a.year}학년(?:[12]학기)?(?:때의|때|에)?(?:${alts.join('|')})${CITE_AFTER}`);
 }
 
 /* ───────────────────────── 후보 ───────────────────────── */
@@ -172,12 +184,18 @@ export function buildLinks(recs: Rec[], stats: Stats, themes: Theme[], S: Studen
     return out;
   };
 
+  // N² 루프 안에서 되풀이하지 않도록 기록마다 한 번만 계산해 둔다(공백 뺀 본문, 직접 언급 정규식, 과목 기본형)
+  const nosText = new Map<string, string>(recs.map((r) => [r.id, nos(r.text)]));
+  const citeRx = new Map<string, RegExp | null>(recs.map((r) => [r.id, citeRegex(r)]));
+  const baseName = new Map<string, string>(recs.map((r) => [r.id, baseOf(r)]));
+
   const links: Link[] = [];
   for (const b of recs) {
     if (b.faint && !b.themes.length) continue;
     const cands: Cand[] = [];
     const fb = new Set(b.fields.map((f) => f.k));
-    const baseB = baseOf(b);
+    const baseB = baseName.get(b.id) ?? '';
+    const nb = nosText.get(b.id) ?? '';
 
     for (const a of recs) {
       if (a === b || a.t > b.t) continue;
@@ -210,9 +228,9 @@ export function buildLinks(recs: Rec[], stats: Stats, themes: Theme[], S: Studen
       const shTh = sharedThemes(a, b);
 
       // 직접 언급, 같은 과목 계열, 교과↔창체
-      const rx = citeRegex(a);
-      const cite = !!rx && rx.test(nos(b.text));
-      const baseA = baseOf(a);
+      const rx = citeRx.get(a.id) ?? null;
+      const cite = !!rx && rx.test(nb);
+      const baseA = baseName.get(a.id) ?? '';
       const ss = a.kind === '세특' && b.kind === '세특' && baseA.length >= 2 && baseA === baseB;
       const cc = isCC(a) !== isCC(b) || (isCC(a) && isCC(b) && a.lane !== b.lane);
 
@@ -262,14 +280,22 @@ export function buildLinks(recs: Rec[], stats: Stats, themes: Theme[], S: Studen
 
 /* ───────────────────────── 연결 이유 ───────────────────────── */
 
+/** 라벨 목록을 ', '로 잇고 마지막 낱말의 받침에 맞는 조사를 붙인다. */
+function listJo(labels: string[], a: string, b: string): string {
+  if (!labels.length) return '';
+  return `${labels.join(', ')}${jo(labels[labels.length - 1], a, b)}`;
+}
+
 /**
  * 연결 하나의 종류와 설명을 만든다.
  * - rel    : 같은 시기면 동시. 깊이가 오르거나 최고 방법 수준이 오르면 심화. 교과군이 바뀌면 확장. 새 방법(2단계 이상)이 있으면 전환. 그 외 반복.
  * - lines  : 근거 줄. 공통 낱말, 같은 관심 분야, 같은 과목, 교과↔창체, 직접 언급, 진로 희망 낱말, 교과군 변화, 방법 변화, 깊이 변화
  * - sent   : 교사가 읽는 설명 문장. 조사는 jo()로 받침에 맞춘다
- * - head   : 짧은 머리(예: ‘전압·전극’ · 과학→동아리)
+ * - head   : 짧은 머리(예: ‘전압, 전극’ / 과학→동아리)
  * - detail : 방법/깊이 변화 요약
  * - why    : 카드 안 한 줄
+ * 대표 방법(main, mainB)은 각 기록의 2단계 이상 첫 방법이다. 뒤 기록에서 새로 쓴 방법(newM)은 대표 방법과 따로 적는다
+ * (대표 방법이 그대로인데 '방법이 바뀌었다'고 말하지 않도록).
  */
 function linkReason(a: Rec, b: Rec, c: Cand, hopeW: string | null): Link {
   const cross = a.lane !== b.lane;
@@ -292,7 +318,10 @@ function linkReason(a: Rec, b: Rec, c: Cand, hopeW: string | null): Link {
     return k ? labelOf(k) : '정리·참여';
   };
   const main = pick(a);
-  const mainB = newM.length ? labelOf(newM[0]) : pick(b);
+  const mainB = pick(b);
+  const sameMain = main === mainB;
+  // 새로 쓴 방법 가운데 대표 방법으로 이미 적은 것은 빼고 최대 3개
+  const added = newM.map(labelOf).filter((l) => l !== mainB).slice(0, 3);
 
   // 같은 관심 분야
   const fa = new Set(a.fields.map((f) => f.k));
@@ -313,53 +342,61 @@ function linkReason(a: Rec, b: Rec, c: Cand, hopeW: string | null): Link {
   if (c.cite) lines.push(`뒤 기록이 ‘${a.year}학년 ${a.subj}’${jo(a.subj, '을', '를')} 직접 언급함`);
   if (hopeW) lines.push(`진로 희망 낱말 ‘${hopeW}’${jo(hopeW, '이', '가')} 두 기록에 모두 나옴`);
   if (cross) lines.push(`교과군: ${a.lane} → ${b.lane}`);
-  lines.push(`방법: ${main} → ${mainB}${newM.length ? ` (새로 쓴 방법: ${newM.slice(0, 3).map(labelOf).join(', ')})` : ''}`);
+  lines.push(
+    (sameMain ? `방법: ${main} 그대로` : `방법: ${main} → ${mainB}`) +
+      (added.length ? ` (새로 더한 방법: ${added.join(', ')})` : ''),
+  );
   lines.push(
     `탐구 깊이: ${a.depth}단계(${DEPTH_TXT[a.depth]}) → ${b.depth}단계(${DEPTH_TXT[b.depth]})` +
       (dd < 0 ? ' (앞 탐구보다 얕아짐)' : dd === 0 ? ' (같은 수준)' : ''),
   );
 
   // 설명 문장
-  const W = w.join('·');
+  const W = w.join(', ');
   const onlyCite = c.cite && w.length === 1 && w[0] === baseOf(a);
   let sent: string;
   if (c.same) {
-    sent = `${a.year}학년에 ${a.subj}${jo(a.subj, '과', '와')} ${b.subj}에서 ‘${W}’${jo(W, '을', '를')} 같은 시기에 함께 다뤘습니다.`;
+    sent = `${a.year}학년 같은 시기에 ${a.subj}${jo(a.subj, '과', '와')} ${b.subj}에서 ‘${W}’ 같은 낱말을 함께 다뤘습니다.`;
   } else {
     const first = onlyCite
       ? `${b.year}학년 ${b.subj}에서 ${a.year}학년 ${a.subj}의 탐구를 직접 언급하며 이어 갔습니다. `
-      : `${a.year}학년 ${a.subj}에서 다룬 ‘${W}’${jo(W, '을', '를')} ${b.year}학년 ${b.subj}에서 다시 다뤘습니다. `;
+      : `${a.year}학년 ${a.subj}의 ‘${W}’ 같은 낱말이 ${b.year}학년 ${b.subj}에서 다시 나옵니다. `;
     const where = cross
       ? `교과군이 ${a.lane}에서 ${b.lane}${jo(b.lane, '으로', '로')} 바뀌어 다른 관점으로 넓어졌고, `
       : c.ss
         ? '같은 과목 안에서 이어졌고, '
         : '같은 교과군 안에서 이어졌고, ';
-    const how = newM.length
-      ? `방법은 ${main}에서 ${mainB}${jo(mainB, '으로', '로')} 바뀌었으며, `
-      : main === mainB
-        ? `방법은 ${main} 그대로였으며, `
-        : `방법은 ${main}에서 ${mainB}${jo(mainB, '으로', '로')} 비슷한 수준에서 이어졌으며, `;
-    const deep = `탐구 깊이는 ${a.depth}단계에서 ${b.depth}단계로 ${dd > 0 ? '올라갔습니다' : dd < 0 ? '낮아졌습니다' : '같습니다'}.`;
+    let how: string;
+    if (sameMain && added.length) how = `방법은 ${main}${jo(main, '을', '를')} 이어 가면서 ${listJo(added, '을', '를')} 새로 더했고, `;
+    else if (sameMain) how = `방법은 ${main} 그대로였고, `;
+    else if (added.length) how = `방법은 ${main}에서 ${mainB}${jo(mainB, '으로', '로')} 바뀌었고(${listJo(added, '을', '를')} 새로 더함), `;
+    else how = `방법은 ${main}에서 ${mainB}${jo(mainB, '으로', '로')} 바뀌었고, `;
+    const deep =
+      dd === 0
+        ? `탐구 깊이는 ${a.depth}단계 그대로입니다.`
+        : `탐구 깊이는 ${a.depth}단계에서 ${b.depth}단계로 ${dd > 0 ? '올라갔습니다' : '낮아졌습니다'}.`;
     sent = first + where + how + deep;
   }
 
+  const methodChange = sameMain ? (added.length ? `${main}에 ${added[0]} 더함` : `${main} 그대로`) : `${main} → ${mainB}`;
   const detail = c.same
-    ? `${cf[0] ?? `${a.lane}·${b.lane}`} 함께 다룸`
-    : `${main} → ${mainB} · 깊이 ${a.depth}→${b.depth}${cf.length ? ` · ${cf[0]}` : ''}`;
+    ? `${cf[0] ?? `${a.lane}, ${b.lane}`} 함께 다룸`
+    : `${methodChange} / 깊이 ${a.depth}→${b.depth}${cf.length ? ` / ${cf[0]}` : ''}`;
 
   const key = c.cite ? '직접 언급' : (hopeW ?? c.shTh[0] ?? w[0]);
   const short =
     kind === '심화'
-      ? `${key} · 깊이 ${a.depth}→${b.depth}`
+      ? `${key} / 깊이 ${a.depth}→${b.depth}`
       : kind === '확장'
-        ? `${key} · ${a.lane}→${b.lane}${dd < 0 ? ' · 깊이↓' : ''}`
+        ? `${key} / ${a.lane}→${b.lane}${dd < 0 ? ' / 깊이↓' : ''}`
         : kind === '전환'
-          ? `${key} · ${main}→${mainB}`
+          ? `${key} / ${sameMain ? `${added[0] ?? mainB} 더함` : `${main}→${mainB}`}`
           : kind === '반복'
-            ? `${key} · 반복(깊이 ${a.depth}→${b.depth})`
-            : `${key} · 같은 시기`;
-  const head = `${c.cite ? '직접 언급 · ' : ''}‘${w.slice(0, 2).join('·')}’${cross ? ` · ${a.lane}→${b.lane}` : c.ss ? ' · 같은 과목' : ''}`;
-  const why = `${c.ss && kind !== '동시' ? '같은 과목 · ' : ''}${short}`;
+            ? `${key} / 반복(깊이 ${a.depth}→${b.depth})`
+            : `${key} / 같은 시기`;
+  const place = c.same ? ` / ${a.lane}, ${b.lane} 같은 시기` : cross ? ` / ${a.lane}→${b.lane}` : c.ss ? ' / 같은 과목' : '';
+  const head = `${c.cite ? '직접 언급 / ' : ''}‘${w.slice(0, 2).join(', ')}’${place}`;
+  const why = `${c.ss && kind !== '동시' ? '같은 과목 / ' : ''}${short}`;
 
   return {
     from: a.id,

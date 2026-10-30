@@ -269,9 +269,9 @@ describe('buildGaps: 창체 줄과 진로 희망', () => {
     expect(club!.text).toContain('동아리활동 기록 2건');
     expect(club!.text).toContain('생명과학·바이오');
     expect(club!.text).toContain('실험·측정이');
-    // 진로활동은 실험·측정을 썼으므로 제안이 없다(설계·제작은 생명과학 진로의 기대 방법이 아님)
+    // 진로활동의 기대 방법(현장 탐방, 설문·면담)은 모두 썼으므로 결손도 제안도 없다
     expect(g.suggestions.some((s) => s.lane === '진로')).toBe(false);
-    expect(g.lanes.find((l) => l.lane === '진로')!.missing).toEqual(['making']);
+    expect(g.lanes.find((l) => l.lane === '진로')!.missing).toEqual([]);
   });
 
   it('진로 희망을 모르면 네 방법이 모두 없을 때만 점검한다', () => {
@@ -324,7 +324,9 @@ describe('buildGaps: 예시 학생', () => {
     // 2-2 칸은 학기 구분 없는 2학년 창체만 있다
     const s3 = g.slots[3];
     expect(s3.recIds.every((id) => recs.find((r) => r.id === id)!.sem === null)).toBe(true);
-    expect(g.trend.some((t) => t.includes('2학년 2학기') && t.includes('학기 구분 없는 기록만'))).toBe(true);
+    // 2-2 칸은 2-1 칸에 이미 든 창체만 다시 들어 있으므로 변화 문장을 만들지 않고 사실만 적는다
+    expect(g.trend.some((t) => t.startsWith('2학년 2학기:') && t.includes('아직 학기별 기록이 없습니다'))).toBe(true);
+    expect(g.trend.some((t) => t.includes('2학년 1학기 → 2학년 2학기'))).toBe(false);
     // 전체 흐름은 아직 오지 않은 2-2 대신 2-1까지 본다
     const whole = g.trend.find((t) => t.startsWith('전체 흐름'))!;
     expect(whole).toContain('2학년 1학기까지');
@@ -362,10 +364,93 @@ describe('buildGaps: 예시 학생', () => {
       expect(s.text).toMatch(/\d/);
       expect(['d', 'g']).toContain(s.tg);
     }
-    // 진로 희망(생명과학)과 맞닿은 실험·측정이 자율·자치활동에 없다
-    const own = g.suggestions.find((s) => s.lane === '자율·자치');
-    expect(own).toBeDefined();
-    expect(own!.method).toBe('experiment');
-    expect(own!.text).toContain('생명과학·바이오');
+    // 학급 자치 활동에 변인 통제 실험을 기대하지 않으므로 자율·자치 줄에는 실험·측정 제안이 없다
+    expect(g.suggestions.some((s) => s.lane === '자율·자치' && s.method === 'experiment')).toBe(false);
+    // 통합사회·한국사 기록은 자료 조사와 토론에 머물러 사회 교과의 설문·면담, 데이터 분석 결손이 잡힌다
+    const soc = g.suggestions.find((s) => s.lane === '사회');
+    expect(soc).toBeDefined();
+    expect(soc!.text).toContain('가운데 어느 것도 드러나지 않습니다');
+    expect(soc!.text).not.toContain('가운데 설문·면담, 데이터 분석 가운데');
+  });
+});
+
+/* ───────────────────────── 리뷰 뒤 보강 ───────────────────────── */
+describe('buildGaps: 학기 구분 없는 기록의 흐름 문장', () => {
+  it('창체 한 건만 있으면 자기 자신과 비교하지 않고 (학년 전체)로 부른다', () => {
+    const recs = [rec('C', { lane: '동아리', kind: '창체', sem: null, methods: ['experiment'], depth: 3 })];
+    const g = buildGaps(recs, [], emptyStudent());
+    expect(g.trend[0]).toMatch(/^1학년 \(학년 전체\): 기록 1건/);
+    expect(g.trend.some((t) => t.includes('→'))).toBe(false);
+    expect(g.trend.some((t) => t.includes('1학년 1학기'))).toBe(false);
+  });
+  it('세특이 있는 학기와 같은 학년의 창체만 든 다음 칸은 변화 문장 대신 사실만 적는다', () => {
+    const recs = [
+      rec('A', { year: 1, sem: 1, methods: ['literature'], depth: 2 }),
+      rec('B', { year: 2, sem: 1, methods: ['experiment'], depth: 3 }),
+      rec('C', { lane: '동아리', kind: '창체', year: 2, sem: null, methods: ['experiment'], depth: 4 }),
+    ];
+    const g = buildGaps(recs, [], emptyStudent());
+    expect(g.trend.some((t) => t.includes('2학년 1학기 → 2학년 2학기'))).toBe(false);
+    expect(g.trend.some((t) => t.startsWith('2학년 2학기:') && t.includes('아직 학기별 기록이 없습니다'))).toBe(true);
+    expect(g.trend.some((t) => t.includes('1학년 1학기 → 2학년 1학기'))).toBe(true);
+  });
+  it('같은 칸 안의 연결은 앞 탐구를 이어받은 것으로 세지 않는다', () => {
+    const recs = [
+      rec('A', { year: 1, sem: 1, methods: ['experiment'], depth: 3 }),
+      rec('C', { lane: '동아리', kind: '창체', year: 1, sem: null, methods: ['experiment'], depth: 4 }),
+      rec('B', { year: 1, sem: 2, methods: ['experiment'], depth: 3 }),
+    ];
+    const links: Link[] = [
+      { from: 'A', to: 'C', rel: '심화', cross: true, ss: false, cc: true, cite: false, words: [], theme: null, hope: null, sc: 5, sent: '', head: '', detail: '', why: '', lines: [], newM: [] },
+      { from: 'A', to: 'B', rel: '심화', cross: false, ss: false, cc: false, cite: false, words: [], theme: null, hope: null, sc: 5, sent: '', head: '', detail: '', why: '', lines: [], newM: [] },
+    ];
+    const g = buildGaps(recs, links, emptyStudent());
+    // 1-1 칸: A→C는 둘 다 같은 칸에 있으므로 세지 않는다. 1-2 칸: B와 (두 칸에 걸친) C가 1-1의 A에서 이어받았다
+    expect(g.trend[0]).not.toContain('이어받은');
+    expect(g.trend[1]).toContain('앞 탐구를 이어받은 기록 2건');
+  });
+  it('학기 결손 문장도 창체만 있는 칸은 (학년 전체)로 부른다', () => {
+    const recs = [
+      rec('C1', { lane: '동아리', kind: '창체', year: 2, sem: null, methods: ['reading'], depth: 2 }),
+      rec('C2', { lane: '진로', kind: '창체', year: 2, sem: null, methods: ['literature'], depth: 2 }),
+    ];
+    const g = buildGaps(recs, [], emptyStudent());
+    const s = g.suggestions.find((x) => x.slot !== undefined);
+    expect(s).toBeDefined();
+    expect(s!.text).toMatch(/^2학년 \(학년 전체\) 기록 2건에 3단계 방법/);
+    expect(g.suggestions.filter((x) => x.slot !== undefined)).toHaveLength(1);
+  });
+});
+
+describe('buildGaps: 결손 문장의 조사', () => {
+  it("결손 방법이 둘 이상이면 'A, B 가운데 어느 것도 드러나지 않습니다'", () => {
+    const recs = [
+      rec('A', { lane: '사회', methods: ['literature'], depth: 2 }),
+      rec('B', { lane: '사회', methods: ['discussion'], depth: 1 }),
+    ];
+    const g = buildGaps(recs, [], emptyStudent());
+    const s = g.suggestions.find((x) => x.lane === '사회')!;
+    expect(s.text).toMatch(/기록 2건에 .* 가운데 어느 것도 드러나지 않습니다\./);
+    expect(s.text).not.toMatch(/가운데 .* 가운데/);
+  });
+  it('결손 방법이 하나면 받침에 맞는 조사를 붙인다', () => {
+    const recs = [
+      rec('A', { lane: '과학', methods: ['experiment', 'data'], depth: 3 }),
+      rec('B', { lane: '과학', methods: ['experiment'], depth: 3 }),
+    ];
+    const g = buildGaps(recs, [], emptyStudent());
+    const s = g.suggestions.find((x) => x.lane === '과학')!;
+    expect(s.text).toContain('기록 2건 가운데 수학적 모델링이 드러난 기록이 없습니다.');
+  });
+  it('자율·자치활동에는 실험·측정을 기대하지 않는다', () => {
+    const S = emptyStudent();
+    S.hopes = [{ year: 1, text: '생명과학 연구원' }];
+    const recs = [
+      rec('C1', { lane: '자율·자치', kind: '창체', subj: '자율·자치활동', year: 1, sem: null, methods: ['proposal', 'survey'] }),
+      rec('C2', { lane: '자율·자치', kind: '창체', subj: '자율·자치활동', year: 2, sem: null, methods: ['discussion'] }),
+    ];
+    const g = buildGaps(recs, [], S);
+    expect(g.lanes.find((l) => l.lane === '자율·자치')!.expected).toEqual(['survey', 'proposal']);
+    expect(g.suggestions.some((s) => s.lane === '자율·자치')).toBe(false);
   });
 });

@@ -252,3 +252,34 @@ describe('sampleStudent() 기록의 주제 - depth 모듈 없이 모든 문장�
     expect(quoted).toBeGreaterThanOrEqual(3);
   });
 });
+
+/* ───────────────────────── 리뷰 뒤 보강 ───────────────────────── */
+describe('⑨ 책 판정은 따옴표 바깥만 본다', () => {
+  it("‘책상 위 공간을 넓히는 정리함’은 책이 아니다", () => {
+    const s = '발명 단원에서 ‘책상 위 공간을 넓히는 정리함’을 설계하고 골판지로 시제품을 제작하여 하중을 측정함.';
+    expect(topicOf(rec(s, [s]), noKw)).toEqual({ text: '책상 위 공간을 넓히는 정리함', kind: 'q' });
+    const s2 = '‘도서관 이용 실태’를 설문 조사하여 결과를 발표함.';
+    expect(topicOf(rec(s2, [s2]), noKw).kind).toBe('q');
+  });
+  it('따옴표 앞의 책·도서, 뒤의 읽고는 책으로 본다', () => {
+    const s = '책 ‘코스모스’를 완독하고 우주의 역사를 정리함.';
+    expect(topicOf(rec(s, [s]), noKw)).toEqual({ text: '코스모스', kind: 'b' });
+    const s2 = '교양서 ‘이기적 유전자’에서 유전자 관점의 진화를 정리함.';
+    expect(topicOf(rec(s2, [s2]), noKw).kind).toBe('b');
+  });
+  it("'s' 폴백은 말줄임표로 잘린 조각을 주제로 쓰지 않는다", () => {
+    const long = '1학년 때 과학탐구실험1 시간에 수행했던 온도에 따른 카탈레이스 활성 실험의 결과를 다시 꺼내어 최적 온도를 넘으면 활성이 급감한 까닭을 단백질의 입체 구조 변화와 연결해 설명함';
+    const r = rec('수업 내용을 정리함.', ['수업 내용을 정리함.'], { acts: [act(long, 3)] });
+    assignTopics([r], someKw);
+    expect(r.topicKind).toBe('k');
+    expect(r.topic).not.toMatch(/…$/);
+  });
+  it('⑤ 명사구에 연결 어미 절이 끼어 있으면 주제로 쓰지 않는다', () => {
+    const s = '순차 탐색과 이진 탐색의 비교 횟수를 세어 효율 차이와 알고리즘의 역할을 설명함.';
+    // ⑤('…의 역할')이 '비교 횟수를 세어 효율 차이와 알고리즘의 역할'을 잡지 않고 핵심어로 내려간다
+    const t = topicOf(rec(s, [s]), noKw);
+    expect(t.kind).not.toBe('p');
+    const withKw = topicOf(rec(s, [s]), () => ['이진탐색', '효율']);
+    expect(withKw).toEqual({ text: '이진탐색, 효율', kind: 'k' });
+  });
+});

@@ -139,7 +139,7 @@ describe('methodMarks', () => {
   it('제외 구간은 표시하지 않고, 같은 방법 안에서 겹치는 구간은 하나만', () => {
     const marks = methodMarks('동물 실험의 윤리를 토론함.', M);
     expect(marks.some((m) => m.key === 'experiment')).toBe(false);
-    const dup = methodMarks('실험 실험 실험', M).filter((m) => m.key === 'experiment');
+    const dup = methodMarks('실험을 실험을 실험을', M).filter((m) => m.key === 'experiment');
     expect(dup).toHaveLength(3);
     const spans = dup.map((m) => `${m.a}-${m.b}`);
     expect(new Set(spans).size).toBe(3);
@@ -242,5 +242,27 @@ describe('사전 전체 건전성(엔진 기준)', () => {
       c.re.lastIndex = 0;
     }
     expect(METHODS.length).toBe(17);
+  });
+});
+
+/* ───────────────────────── 리뷰 뒤 보강 ───────────────────────── */
+describe('compileFields: 두 글자 낱말은 낱말 경계를 넘지 않는다', () => {
+  it("'국내 과학'에서 '내과'가 걸리지 않는다", () => {
+    const F = compileFields();
+    expect(fieldsOf('국내 과학 기술의 발전과 국내과학 산업 그리고 국내 과학자', F)).toEqual([]);
+    const med = fieldsOf('내과 의사와 외과 의사를 만나 내과 진료를 참관함.', F);
+    expect(med.find((h) => h.k === '의학·의료')).toBeDefined();
+  });
+});
+
+describe('compileMethods: 한 글자 표현은 무시한다', () => {
+  it("'측'은 측정·예측·추측 어디에나 걸리므로 사전에 넣지 않는다", () => {
+    const MU = compileMethods({ coding: ['측', ' ', '시 뮬'] });
+    const cd = MU.find((c) => c.def.key === 'coding')!;
+    expect(cd.user).toBeInstanceOf(RegExp);
+    expect(cd.user!.source).not.toContain('측');
+    expect(cd.user!.source).toContain('시\\s*뮬');
+    expect(methodHits('길이를 측정함.', MU)).not.toContain('coding');
+    expect(compileMethods({ coding: ['측'] }).find((c) => c.def.key === 'coding')!.user).toBeNull();
   });
 });

@@ -27,18 +27,24 @@ export const THEME_COLORS: string[] = ['#7a55d6', '#2f8f57', '#c48f0a', '#1a1a1a
  * - N   : 기록 수(기록이 없어도 1로 두어 나눗셈이 깨지지 않게 한다)
  * - df  : 낱말이 나온 기록 수(기록 안 반복은 한 번으로 센다)
  * - kdf : 낱말이 핵심 문장에 나온 기록 수
- * - idf : ln((N+1)/(df+0.5)). 드문 낱말일수록 크다. df가 N이어도 양수다.
+ * - idf : ln((Neff+1)/(df+0.5)). 드문 낱말일수록 크다. df가 N이어도 양수다.
+ *         Neff = max(N, 8). 기록이 서너 건뿐인 학생부(1학년 1학기만 있을 때)에서는 N을 그대로 쓰면 idf가 0.2 안팎으로
+ *         내려앉아 연결 점수가 문턱(5/4/2.5)에 닿지 못한다. 기록 8건짜리 학생부와 같은 눈금으로 재어
+ *         '1학년 학생부만 있어도 동작한다'는 원칙을 지킨다. 순위는 바뀌지 않는다.
  * - cw  : 흔한 낱말 가중치(dict/stop.ts의 COMMON). 여러 학생부에 두루 나오는 낱말은 0.25까지 낮아진다.
  */
+export const MIN_EFFECTIVE_N = 8;
+
 export function buildStats(recs: Rec[]): Stats {
   const N = Math.max(1, recs.length);
+  const Neff = Math.max(N, MIN_EFFECTIVE_N);
   const df = new Map<string, number>();
   const kdf = new Map<string, number>();
   for (const r of recs) {
     r.tf.forEach((_, t) => df.set(t, (df.get(t) ?? 0) + 1));
     r.ktf.forEach((t) => kdf.set(t, (kdf.get(t) ?? 0) + 1));
   }
-  const idf = (t: string): number => Math.log((N + 1) / ((df.get(t) ?? 0) + 0.5));
+  const idf = (t: string): number => Math.log((Neff + 1) / ((df.get(t) ?? 0) + 0.5));
   const cw = (t: string): number => commonWeight(t);
   return { N, df, kdf, idf, cw };
 }
@@ -91,6 +97,8 @@ const MAX_THEMES = 6;
  * - 핵심 문장에 나온 기록(kdf)이 2건 이상
  * - 흔하지 않음: df가 기록의 30%(최소 4건) 이하
  * - 두 글자 낱말은 kdf 3건 이상일 때만(두 글자는 우연히 겹치기 쉽다)
+ * - 흔한 낱말 가중치 cw가 0.5 이상(관심 분야 낱말은 예외). '반응', '결과'처럼 어느 교과에나 나오는 말은
+ *   '독자의 반응'과 '화학 반응'을 한 주제로 묶어 버리므로 후보에서 뺀다
  * - 그 낱말을 핵심 문장에 쓰거나 두 번 이상 쓴 기록들이 두 교과군 이상 또는 두 학년 이상에 걸침
  *
  * 점수 = (Σmin(3, tf) + kdf×1.5 + 교과군 수×1.4 + 학년 수×1.6 + (3자 이상이면 2)) × cw × (관심 분야 낱말이면 1.3)
@@ -98,7 +106,8 @@ const MAX_THEMES = 6;
  * 겹침 합치기(점수 높은 순으로 보면서)
  * - 기록 집합의 자카드 유사도가 0.7을 넘으면 같은 주제
  * - 한 낱말이 다른 낱말을 품고('내성균' ⊂ '항생제내성균') 자카드가 0.3을 넘으면 같은 주제
- * 합쳐진 낱말은 words에, 기록은 ids에 더한다. 주제가 6개가 되면 멈춘다.
+ * 합쳐진 낱말은 words에, 기록은 ids에 더한다. 주제는 최대 6개까지만 새로 만들되,
+ * 이미 만든 주제에 합쳐지는 낱말('내성균' ⊂ '항생제내성균')은 6개가 찬 뒤에도 계속 합친다(형광펜·기록 집계에서 빠지지 않게).
  * 색은 THEME_COLORS를 순서대로 쓴다. 각 기록의 r.themes에 자기가 속한 주제 이름을 적는다.
  */
 export function buildThemes(recs: Rec[], stats: Stats): Theme[] {
@@ -111,6 +120,7 @@ export function buildThemes(recs: Rec[], stats: Stats): Theme[] {
     if (d < 2) return;
     if ((df.get(t) ?? 0) > dfLimit) return;
     if (d < 3 && t.length < 3) return;
+    if (cw(t) < 0.5 && !FIELD_TERMS.has(t)) return;
     const rs = recs.filter((r) => r.ktf.has(t) || (r.tf.get(t) ?? 0) >= 2);
     if (!rs.length) return;
     const lanes = new Set<LaneKey>(rs.map((r) => r.lane));
@@ -128,7 +138,6 @@ export function buildThemes(recs: Rec[], stats: Stats): Theme[] {
 
   const groups: Group[] = [];
   for (const c of cand) {
-    if (groups.length >= MAX_THEMES) break;
     const ids = new Set(c.rs.map((r) => r.id));
     const dup = groups.find((g) => {
       const inter = g.rs.filter((r) => ids.has(r.id)).length;
@@ -140,6 +149,8 @@ export function buildThemes(recs: Rec[], stats: Stats): Theme[] {
       for (const r of c.rs) if (!dup.rs.includes(r)) dup.rs.push(r);
       continue;
     }
+    // 겹치지 않는 새 주제는 6개까지만. 그 뒤의 후보도 기존 주제에 합쳐질 수는 있으므로 break 하지 않는다
+    if (groups.length >= MAX_THEMES) continue;
     groups.push({ t: c.t, alt: [], rs: c.rs.slice() });
   }
 

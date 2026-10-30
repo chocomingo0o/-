@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanTopic, jo, nos, sentences, stripAuthor, summarize, tokens, validTopic } from './text';
+import { clauseBroken, cleanTopic, jo, nos, sentences, stripAuthor, summarize, tokens, validTopic } from './text';
 
 describe('nos', () => {
   it('공백을 모두 뺀다', () => {
@@ -179,5 +179,79 @@ describe('jo (조사 고르기)', () => {
   it('한글도 숫자도 아니면 뒤 꼴, 빈 낱말도 뒤 꼴', () => {
     expect(jo('DNA', '은', '는')).toBe('는');
     expect(jo('', '을', '를')).toBe('를');
+  });
+});
+
+/* ───────────────────────── 리뷰 뒤 보강 ───────────────────────── */
+describe('sentences: 따옴표 안의 물음표', () => {
+  it("‘…일까?’라는 의문을 품고 …' 는 한 문장이다", () => {
+    const text = '‘왜 효소는 온도에 따라 활성이 달라질까?’라는 의문을 품고 온도별로 카탈레이스 반응 속도를 측정함.';
+    const out = sentences(text);
+    expect(out).toHaveLength(1);
+    expect(out[0].s).toBe(text);
+  });
+  it('문장 부호 뒤의 닫는 따옴표는 앞 문장에 붙고, 띄어쓰기가 있으면 거기서 끊는다', () => {
+    const text = '실험함.’ 다음.';
+    const out = sentences(text);
+    expect(out.map((o) => o.s)).toEqual(['실험함.’', '다음.']);
+    for (const o of out) expect(text.slice(o.a, o.b)).toBe(o.s);
+  });
+  it('곧은 따옴표는 문장 안에 열린 짝이 있을 때만 닫는 따옴표다', () => {
+    expect(sentences('"왜 그럴까?"라는 질문을 던짐. 다음 문장.').map((o) => o.s)).toEqual(['"왜 그럴까?"라는 질문을 던짐.', '다음 문장.']);
+    // 마침표 뒤에 바로 오는 여는 곧은 따옴표는 다음 문장의 시작이다
+    expect(sentences('측정함. "다음 질문"을 세움.').map((o) => o.s)).toEqual(['측정함.', '"다음 질문"을 세움.']);
+  });
+});
+
+describe('tokens: 용언 어간과 관형형을 버린다', () => {
+  it("'모르는', '지켜', '줄이는', '어떤', '전한', '쓰인'은 낱말이 아니다", () => {
+    const out = tokens('모르는 표현이 나오면 뜻을 추측한 뒤 사전으로 확인함. 수칙을 지켜 실점을 줄이는 모습. 어떤 역할을 했는지 전한 두 기사. 쓰인 외래어.');
+    for (const bad of ['모르', '지켜', '줄이', '어떤', '전한', '쓰인']) expect(out).not.toContain(bad);
+    expect(out).toEqual(expect.arrayContaining(['추측', '사전', '수칙', '실점', '외래어']));
+  });
+  it('이/리로 끝나는 명사는 그대로 남고(놀이, 먹이, 종이, 거리), 용언 어간(배우는)은 버린다', () => {
+    const out = tokens('놀이는 먹이는 종이는 거리는 배우는 원리는 줄이는 지키는.');
+    expect(out).toEqual(expect.arrayContaining(['놀이', '먹이', '종이', '거리']));
+    for (const bad of ['배우', '줄이', '지키']) expect(out).not.toContain(bad);
+  });
+});
+
+describe('validTopic: 절이 끼어 있는 조각은 주제가 아니다', () => {
+  it('연결 어미 어절이 가운데 있으면 거부', () => {
+    expect(validTopic('이진 탐색의 비교 횟수를 세어 효율 차이')).toBe(false);
+    expect(validTopic('장구로 세마치장단을 쳐 보며 전통 음악의 구조')).toBe(false);
+    expect(validTopic('학기 말에 오래달리기와 윗몸 말아 올리기 기록')).toBe(false);
+  });
+  it('부사어로 시작하는 조각은 거부하되 관형어가 이어지면 받는다', () => {
+    expect(validTopic('학교에서 생긴 갈등 사례')).toBe(false);
+    expect(validTopic('온도에 따른 카탈레이스 활성 변화')).toBe(true);
+    expect(validTopic('기질 농도가 반응 속도에 미치는 영향')).toBe(true);
+    expect(clauseBroken('영어 기사의 어조 비교')).toBe(false); // '영어'는 명사 예외
+  });
+  it("'효과', '성과'로 끝나는 명사구는 조사 '과'로 보지 않는다", () => {
+    expect(validTopic('소독용 에탄올의 농도와 살균 효과')).toBe(true);
+    expect(validTopic('기후변화와 탄소 중립')).toBe(true);
+    expect(validTopic('항생제와')).toBe(false);
+  });
+});
+
+describe('jo: 로마 숫자 과목명', () => {
+  it('Ⅰ·Ⅱ·Ⅲ과 영문 I·II·III를 일·이·삼으로 읽는다', () => {
+    expect(jo('영어Ⅰ', '을', '를')).toBe('을');
+    expect(jo('영어Ⅰ', '과', '와')).toBe('과');
+    expect(jo('물리학Ⅱ', '으로', '로')).toBe('로');
+    expect(jo('화학Ⅲ', '이', '가')).toBe('이');
+    expect(jo('영어I', '을', '를')).toBe('을');
+    expect(jo('수학II', '은', '는')).toBe('는');
+    expect(jo('AI', '을', '를')).toBe('를'); // 영문 낱말의 I는 로마 숫자가 아니다
+  });
+});
+
+describe('summarize: 공백을 접는다', () => {
+  it('연속 공백과 줄바꿈은 한 칸이 되고 평가 꼬리는 그대로 떼어진다', () => {
+    expect(summarize('실험   결과를\n꼼꼼히  기록하는 태도가 돋보임.')).toBe('실험 결과를 꼼꼼히 기록');
+    const t0 = Date.now();
+    summarize('가' + ' '.repeat(3000) + '가.');
+    expect(Date.now() - t0).toBeLessThan(50);
   });
 });

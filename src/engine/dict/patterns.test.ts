@@ -179,3 +179,18 @@ describe('rx()', () => {
     expect(REFLECT_RX.test(s)).toBe(true);
   });
 });
+
+describe('EVAL_TAIL은 공백이 긴 입력에서도 빠르다(역행 폭발 없음)', () => {
+  it('공백 3000개짜리 문장을 50ms 안에 검사한다', () => {
+    const t0 = Date.now();
+    EVAL_TAIL.test('가' + ' '.repeat(3000) + '가.');
+    EVAL_TAIL.test('가' + '\u00a0'.repeat(3000) + '가.');
+    expect(Date.now() - t0).toBeLessThan(50);
+  });
+  it('행위 동사에 만들기·구현·배양이 들어 있다', () => {
+    for (const s of ['글라이더를 만들어 비행 거리를 늘림', '시뮬레이션을 구현함', '세균을 배양함', '전압을 측정함']) {
+      expect(ACTION_VERBS.test(s), s).toBe(true);
+    }
+    expect(ACTION_VERBS.test('비판적 사고력이 돋보임')).toBe(false);
+  });
+});

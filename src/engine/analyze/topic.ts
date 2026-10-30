@@ -26,7 +26,7 @@
  * 이 파일은 DOM에 의존하지 않는다.
  */
 import type { Act, Rec, Sent, TopicKind } from '../types';
-import { cleanTopic, nos, stripAuthor, summarize, validTopic } from './text';
+import { clauseBroken, cleanTopic, nos, stripAuthor, summarize, validTopic } from './text';
 
 export interface TopicResult {
   text: string;
@@ -104,8 +104,10 @@ const P_ABOUT_LOOSE = /([^.]{3,60}?)에\s*(?:대해|대하여|관해|관하여|�
 const Q_ANY = new RegExp(`${OPEN}(${INNER}{4,48})${CLOSE}`);
 /** 따옴표 안이 '제목 (저자)' 꼴이면 책 */
 const BOOK_PAREN = /\([가-힣A-Za-z.\s]{2,20}\)$/;
-/** 따옴표 바로 뒤에 이런 말이 오면 책 */
-const BOOK_NEAR = /(읽고|완독|탐독|도서|책)/;
+/** 따옴표 바로 뒤(12자 안)에 이런 말이 오면 책. 따옴표 안의 제목('책상 위 … 정리함')은 보지 않는다 */
+const BOOK_NEAR = /(읽고|읽은|읽으며|완독|탐독|도서|책)/;
+/** 따옴표 바로 앞에 이런 말이 붙어 있으면 책('책 ‘…’', '도서 ‘…’', '소설 ‘…’을 읽고') */
+const BOOK_BEFORE = /(?:책|도서|소설|저서|교양서|읽은)\s*$/;
 
 /** 앞뒤 따옴표 찌꺼기 떼기 */
 const stripQuotes = (s: string): string => s.replace(/^[‘'“"「『]+|[’'”"」』]+$/g, '').trim();
@@ -192,12 +194,14 @@ export function topicOf(r: Rec, kw: (r: Rec) => string[]): TopicResult {
     if (!hm) continue;
     const c = cleanTopic(hm[1]).replace(P_NOUN_CLAUSE, '').trim();
     const pre = c.replace(P_NOUN_TAIL, '').trim();
+    // 어절 사이에 연결 어미('세어', '쳐 보며')가 끼어 있으면 명사구가 아니라 절이다
     if (
       c.length >= 12 &&
       c.length <= 46 &&
       pre.split(/\s+/).length >= 2 &&
       !P_NOUN_BAD_HEAD.test(pre) &&
-      /^[가-힣A-Za-z]/.test(c)
+      /^[가-힣A-Za-z]/.test(c) &&
+      !clauseBroken(c)
     ) {
       return { text: c, kind: 'p' };
     }
@@ -250,8 +254,11 @@ export function topicOf(r: Rec, kw: (r: Rec) => string[]): TopicResult {
     const q = Q_ANY.exec(ks.s);
     if (!q) continue;
     const raw = q[1].trim();
-    const after = ks.s.slice(q.index, q.index + q[0].length + 12);
-    const isBook = BOOK_PAREN.test(raw) || BOOK_NEAR.test(after);
+    // 책 판정은 따옴표 바깥(뒤 12자, 앞 12자)만 본다. 따옴표 안의 '책상', '도서관'이 책으로 읽히지 않게
+    const end = q.index + q[0].length;
+    const after = ks.s.slice(end, end + 12);
+    const before = ks.s.slice(Math.max(0, q.index - 12), q.index);
+    const isBook = BOOK_PAREN.test(raw) || BOOK_NEAR.test(after) || BOOK_BEFORE.test(before);
     const c = stripAuthor(raw);
     if (validQuoted(c)) return { text: c, kind: isBook ? 'b' : 'q' };
   }
@@ -272,7 +279,8 @@ export function topicOf(r: Rec, kw: (r: Rec) => string[]): TopicResult {
  *    주제가 핵심어 외('q', 'p', 'b')로 잡힌 기록은 faint(약한 기록) 표시를 푼다.
  * 2. 주제가 핵심어뿐('k')이고 활동 흐름(acts)이 있으면 활동 요약에서 주제를 다시 고른다.
  *    - 활동 요약 안의 '…을 탐구/분석/측정…' 앞 명사구(6자 이상, 앞의 활동 절은 뗀 뒤)가 있으면 그것을 'p'로
- *    - 없으면 점수가 가장 높은 활동 요약의 첫 절(8~48자)을, 길이가 맞지 않으면 44자로 줄인 요약을 's'로.
+ *    - 없으면 점수가 가장 높은 활동 요약의 첫 절(8~48자)을 's'로. 첫 절이 너무 길면 44자로 줄인 요약을 쓰되,
+ *      줄이다가 말줄임표로 잘리면('…실험의…') 문장 조각이 되므로 그대로 핵심어('k')에 머문다.
  *      앞머리의 지시어('그 ', '이 ')는 뗀다
  *    이 보정은 주제 문구를 읽기 좋게 할 뿐이므로 faint는 풀지 않는다
  *    (풀면 활동 흐름이 있는 모든 기록이 약한 기록에서 벗어나 표시의 의미가 없어진다).
@@ -309,8 +317,17 @@ export function assignTopics(recs: Rec[], kw: (r: Rec) => string[]): void {
         r.topicKind = 'p';
       } else {
         const cl = used.text.split(CLAUSE_SPLIT)[0].trim().replace(LEAD_PRONOUN, '');
-        r.topic = cl.length >= 8 && cl.length <= 48 ? cl : summarize(used.text, 44).replace(LEAD_PRONOUN, '');
-        r.topicKind = 's';
+        if (cl.length >= 8 && cl.length <= 48) {
+          r.topic = cl;
+          r.topicKind = 's';
+        } else {
+          const sm = summarize(used.text, 44).replace(LEAD_PRONOUN, '');
+          // 말줄임표로 잘린 조각은 주제로 쓰지 않는다(핵심어 유지)
+          if (sm.length >= 8 && !sm.endsWith('…')) {
+            r.topic = sm;
+            r.topicKind = 's';
+          }
+        }
       }
     }
 

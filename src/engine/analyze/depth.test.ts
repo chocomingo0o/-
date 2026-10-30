@@ -70,7 +70,7 @@ const CTX = buildCtx(emptyStudent());
 
 describe('DEPTH_TXT', () => {
   it('깊이 1~4의 이름. 0번은 비어 있다', () => {
-    expect([...DEPTH_TXT]).toEqual(['', '정리·참여', '조사·분석', '분석·실험', '성찰·확장']);
+    expect([...DEPTH_TXT]).toEqual(['', '정리·참여', '조사·분석', '실험·자료 생산', '성찰·확장']);
   });
 });
 
@@ -125,7 +125,7 @@ describe('analyzeRecord(sampleStudent())', () => {
   });
 
   it('과학 탐구 기능: 변인 통제(design)와 측정(collect)이 과학탐구실험1과 생명과학탐구반에 잡힌다', () => {
-    for (const r of [by('과학탐구실험1'), by('동아리활동 (생명과학탐구반)')]) {
+    for (const r of [by('과학탐구실험1'), by('동아리활동(생명과학탐구반)')]) {
       expect(r.skills, r.subj).toContain('design');
       expect(r.skills, r.subj).toContain('collect');
       expect(r.skillCounts.design).toBeGreaterThanOrEqual(1);
@@ -136,11 +136,24 @@ describe('analyzeRecord(sampleStudent())', () => {
     }
   });
 
-  it('효소 줄기 기록들은 모두 실험·측정을 쓴다', () => {
-    for (const subj of ['과학탐구실험1', '동아리활동 (생명과학탐구반)', '생명과학']) {
+  it('효소 줄기: 직접 실험한 과학탐구실험1과 동아리는 실험·측정, 자료를 해석한 생명과학은 3단계 모델링', () => {
+    for (const subj of ['과학탐구실험1', '동아리활동(생명과학탐구반)']) {
       expect(by(subj).methods, subj).toContain('experiment');
     }
-    expect(by('동아리활동 (생명과학탐구반)').depth).toBe(4); // 반복 측정 + 한계 지적
+    // 생명과학 세특은 그래프 해석과 모식도 설명이지 실험을 한 기록이 아니다('카탈레이스', '실험의' 같은 낱말만으로 실험으로 세지 않는다)
+    const bio = by('생명과학');
+    expect(bio.methods).not.toContain('experiment');
+    expect(bio.methods).toContain('modeling');
+    expect(bio.depth).toBeGreaterThanOrEqual(3);
+    expect(by('동아리활동(생명과학탐구반)').depth).toBe(4); // 반복 측정 + 한계 지적
+  });
+
+  it('평가 문장에 걸린 설명 낱말로 깊이가 올라가지 않는다(한국사1, 공통수학1, 1학년 진로활동은 3단계 미만)', () => {
+    // '연표로 정리', '그래프를 그려 설명', '예를 직접 만들어 제시', '배양하고 분석하는 일(직업 설명)', '실험 기록을 남기는 습관'
+    for (const subj of ['한국사1', '한국사2', '공통수학1']) expect(by(subj).depth, subj).toBeLessThan(3);
+    const career = recs.find((r) => r.kind === '창체' && r.lane === '진로' && r.year === 1)!;
+    expect(career.methods).not.toContain('experiment');
+    expect(career.depth).toBeLessThan(3);
   });
 
   it('통합사회: 토론과 자료 조사만 있어 깊이 2 이하', () => {
@@ -276,7 +289,7 @@ describe('깊이 1~4', () => {
     expect(r.sents[0].rf).toBe(false);
     expect(r.methods).toContain('experiment');
     expect(r.depth).toBe(3);
-    expect(DEPTH_TXT[r.depth]).toBe('분석·실험');
+    expect(DEPTH_TXT[r.depth]).toBe('실험·자료 생산');
   });
   it('3단계 문장에 성찰(오차, 재실험)이 붙으면 4', () => {
     const r = run(`${S3} ${RF3}`, CTX);
@@ -434,5 +447,23 @@ describe('connectCue, skills, tf', () => {
     const r = run('통합과학1 시간에 배운 카탈레이스의 작용을 카탈레이스 실험으로 확인함.', ctx);
     expect(r.tf.has('통합과학1')).toBe(false);
     expect(r.tf.get('카탈레이스')).toBe(2);
+  });
+});
+
+/* ───────────────────────── 리뷰 뒤 보강 ───────────────────────── */
+describe('평가 문장에서도 3단계 방법은 남는다', () => {
+  it("'글라이더를 만들어 비행 거리를 늘리는 모습이 인상적임'은 설계·제작 3단계", () => {
+    const r = run('글라이더를 만들어 비행 거리를 늘리는 모습이 인상적임.', CTX);
+    expect(r.sents[0].ms).toContain('making');
+    expect(r.depth).toBe(3);
+  });
+  it("'파이썬으로 시뮬레이션을 만들어 결과를 예측하는 역량이 돋보임'은 코딩·시뮬레이션", () => {
+    const r = run('파이썬으로 시뮬레이션을 만들어 결과를 예측하는 역량이 돋보임.', CTX);
+    expect(r.sents[0].ms).toContain('coding');
+    expect(r.depth).toBe(3);
+  });
+  it("행위 동사 없는 평가 문장('비판적 사고력이 돋보임')의 1·2단계 방법은 여전히 뺀다", () => {
+    const r = run('비판적 사고력이 돋보임.', CTX);
+    expect(r.sents[0].ms).toEqual([]);
   });
 });

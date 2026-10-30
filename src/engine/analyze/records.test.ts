@@ -120,9 +120,9 @@ describe('buildRecords(sampleStudent())', () => {
   });
   it('동아리 카드 이름은 영역 이름에서 시간 표시를 뺀 것', () => {
     const club1 = recs.find((r) => r.kind === '창체' && r.lane === '동아리' && r.year === 1)!;
-    expect(club1.subj).toBe('동아리활동 (생명과학탐구반)');
+    expect(club1.subj).toBe('동아리활동(생명과학탐구반)');
     const club2 = recs.find((r) => r.kind === '창체' && r.lane === '동아리' && r.year === 2)!;
-    expect(club2.subj).toBe('동아리활동 (미생물탐구반)');
+    expect(club2.subj).toBe('동아리활동(미생물탐구반)');
     expect(recs.find((r) => r.kind === '창체' && r.lane === '진로')!.subj).toBe('진로활동');
   });
   it('본문은 원문 그대로이고 분석 필드는 빈 값으로 초기화된다', () => {
@@ -257,5 +257,26 @@ describe('buildRecords 가장자리 경우', () => {
     expect(recs[0].lane).toBe('자율·자치');
     expect(recs[1].subj).toBe('봉사활동');
     expect(recs[1].lane).toBe('자율·자치');
+  });
+});
+
+/* ───────────────────────── 리뷰 뒤 보강 ───────────────────────── */
+describe('buildRecords: 배열이 빠진 작업 파일도 예외 없이 다룬다', () => {
+  it('names, courses, changche, seteuk이 없어도 분석 단위를 만든다', () => {
+    const S = emptyStudent() as unknown as Record<string, unknown>;
+    delete S.courses;
+    delete S.changche;
+    S.seteuk = [{ year: 1, sem: 1, text: LONG }];
+    const recs = buildRecords(S as unknown as StudentRecord);
+    expect(recs).toHaveLength(1);
+    expect(recs[0].subj).toBe('(과목 미확인)');
+    expect(subjectStop(S as unknown as StudentRecord).size).toBe(0);
+    delete S.seteuk;
+    expect(buildRecords(S as unknown as StudentRecord)).toEqual([]);
+  });
+  it('창체 제목은 괄호 앞 띄어쓰기를 붙인다', () => {
+    const S = emptyStudent();
+    S.changche = [{ year: 1, area: '동아리활동 (생명과학탐구반)(34시간)', hours: 34, text: LONG }];
+    expect(buildRecords(S)[0].subj).toBe('동아리활동(생명과학탐구반)');
   });
 });

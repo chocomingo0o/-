@@ -69,12 +69,13 @@ export interface HighlightSegment {
 const KIND_ORDER: Record<HighlightKind, number> = { method: 0, theme: 1, skill: 2 };
 
 /**
- * 컴파일한 사전은 사전(userDict) 객체가 같으면 다시 만들지 않는다.
+ * 컴파일한 사전은 사전(userDict)의 내용이 같으면 다시 만들지 않는다.
  * 기록 상세 창이 열릴 때마다 호출되므로 17개 정규식을 매번 새로 만들지 않기 위한 것이다.
- * userDict가 없을 때(기본 사전)는 한 벌만 둔다.
+ * 캐시 키는 객체 동일성이 아니라 내용(JSON 문자열)이다. 화면이 같은 객체를 제자리에서 고쳐도(표현 추가)
+ * analyze()와 형광펜이 같은 사전을 보게 된다. userDict가 없을 때(기본 사전)는 한 벌만 둔다.
  */
 let baseMethods: CompiledMethod[] | null = null;
-const userMethods = new WeakMap<object, CompiledMethod[]>();
+let userCache: { key: string; cm: CompiledMethod[] } | null = null;
 let baseSkills: CompiledSkill[] | null = null;
 
 function methodsFor(userDict?: UserDict): CompiledMethod[] {
@@ -82,12 +83,14 @@ function methodsFor(userDict?: UserDict): CompiledMethod[] {
     if (!baseMethods) baseMethods = compileMethods();
     return baseMethods;
   }
-  let cm = userMethods.get(userDict);
-  if (!cm) {
-    cm = compileMethods(userDict);
-    userMethods.set(userDict, cm);
+  let key: string;
+  try {
+    key = JSON.stringify(userDict);
+  } catch {
+    return compileMethods(userDict);
   }
-  return cm;
+  if (!userCache || userCache.key !== key) userCache = { key, cm: compileMethods(userDict) };
+  return userCache.cm;
 }
 
 function skillsFor(): CompiledSkill[] {

@@ -41,13 +41,20 @@ const PALETTE = {
   red: '#e34948',
 } as const;
 
-/** 창체 세 줄은 어떤 탐구든 나올 수 있으므로 기대 방법을 넓게 잡는다. 진로 희망과 맞는 것만 결손으로 보는 일은 gaps.ts가 한다. */
-const CC_EXPECTED: MethodKey[] = ['making', 'survey', 'fieldtrip', 'experiment'];
+/**
+ * 창체 줄의 기대 방법. 영역 성격에 맞게 나눈다(진로 희망과 맞는 것만 결손으로 보는 일은 gaps.ts가 한다).
+ * - 동아리: 탐구 동아리라면 실험·제작·설문·탐방이 모두 나올 수 있다.
+ * - 진로: 현장 탐방과 직업인 면담이 자연스럽다. 학급 자치 활동에 변인 통제 실험을 기대하지는 않는다.
+ * - 자율·자치: 학급 설문과 해결안 제안 정도를 기대한다.
+ */
+const CLUB_EXPECTED: MethodKey[] = ['experiment', 'making', 'survey', 'fieldtrip'];
+const CAREER_EXPECTED: MethodKey[] = ['fieldtrip', 'survey'];
+const AUTONOMY_EXPECTED: MethodKey[] = ['survey', 'proposal'];
 
 export const LANES: LaneDef[] = [
-  { key: '진로', label: '진로활동', color: PALETTE.violet, cc: true, expected: [...CC_EXPECTED] },
-  { key: '동아리', label: '동아리활동', color: PALETTE.orange, cc: true, expected: [...CC_EXPECTED] },
-  { key: '자율·자치', label: '자율·자치활동', color: PALETTE.teal, cc: true, expected: [...CC_EXPECTED] },
+  { key: '진로', label: '진로활동', color: PALETTE.violet, cc: true, expected: [...CAREER_EXPECTED] },
+  { key: '동아리', label: '동아리활동', color: PALETTE.orange, cc: true, expected: [...CLUB_EXPECTED] },
+  { key: '자율·자치', label: '자율·자치활동', color: PALETTE.teal, cc: true, expected: [...AUTONOMY_EXPECTED] },
   { key: '국어', label: '국어', color: PALETTE.red, cc: false, expected: ['critique', 'writing', 'reading'] },
   { key: '수학', label: '수학', color: PALETTE.blue, cc: false, expected: ['proof', 'modeling', 'data'] },
   { key: '영어', label: '영어', color: PALETTE.yellow, cc: false, expected: ['reading', 'critique', 'discussion'] },
