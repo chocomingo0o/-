@@ -1,498 +1,289 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Users, 
-  FileText, 
-  BarChart3, 
-  Search, 
-  LogOut, 
-  ChevronRight,
-  User,
-  Clock,
-  LayoutGrid,
-  Maximize2,
-  HelpCircle,
-  CheckSquare,
-  MessageSquare,
-  ArrowLeftRight
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { cn } from './lib/utils';
-import { StudentData, GradeData } from './types';
-import { FileUpload } from './components/FileUpload';
-import { GradeTrendChart } from './components/GradeTrendChart';
-import { analyzeLifeRecord } from './services/geminiService';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AppProvider, useApp } from './state/store';
+import { useAnalysis, dropAnalysisCache } from './hooks/useAnalysis';
+import { ingestFiles } from './lib/files';
+import { download, makeWorkFile, mergeUserDict, todayStamp } from './lib/storage';
+import { isDark, restoreTheme, toggleTheme } from './lib/theme';
+import { blindName, uid } from './lib/utils';
+import { sampleStudent } from './fixtures/sample';
+import type { StudentEntry } from './engine/types';
+import { semLabel } from './engine/analyze';
+import { LANE } from './engine/dict/subjects';
+import { Landing } from './components/Landing';
+import { TopBar } from './components/TopBar';
+import { StudentHead } from './components/StudentHead';
+import { SideDrawer } from './components/SideDrawer';
+import { TreeBoard } from './components/tree/TreeBoard';
+import { RecordDrawer } from './components/RecordDrawer';
+import { MethodView } from './components/method/MethodView';
+import { MethodList } from './components/method/MethodList';
+import { NotesView } from './components/NotesView';
+import { DictPanel } from './components/DictPanel';
+import { ManualInput } from './components/ManualInput';
+import { Busy, Toast } from './components/common';
 
 export default function App() {
-  const [students, setStudents] = useState<StudentData[]>([
-    {
-      id: "test-1",
-      examNo: "A002",
-      name: "김민아",
-      school: "서울여자고등학교",
-      graduationYear: "2024",
-      grades: [
-        { semester: "1-1", all: 2.79, korean: 3.0, english: 2.0, math: 3.0, social: 1.0, science: 3.0, others: 3.57 },
-        { semester: "1-2", all: 3.63, korean: 3.0, english: 3.0, math: 4.0, social: 4.0, science: 2.0, others: 4.57 },
-        { semester: "2-1", all: 3.78, korean: 1.0, english: 5.0, math: 3.0, social: 3.0, science: 5.0, others: 3.0 },
-        { semester: "2-2", all: 4.13, korean: 2.0, english: 4.0, math: 3.0, social: 3.0, science: 5.67, others: 4.0 },
-        { semester: "3-1", all: 3.05, korean: 4.0, english: 3.0, math: 3.0, social: 2.5, science: 3.0, others: 3.0 }
-      ],
-      subjectGrades: {},
-      keywords: {
-        academic: ["자기주도적 학습", "탐구역량 우수", "국어 교과 강점", "비판적 사고력"],
-        career: ["미디어 콘텐츠 관심", "메타버스 융합", "디지털 리터러시", "스토리텔링"],
-        community: ["리더십 발휘", "협업 및 소통", "성실한 태도", "나눔과 배려"]
-      },
-      details: {
-        academic: "전반적으로 우수한 학업 성취도를 보이며 특히 국어와 사회 교과에서 뛰어난 역량을 나타냄. 학년이 올라갈수록 탐구 중심의 학습 태도가 돋보임.",
-        nonAcademic: "메타버스 및 미디어 콘텐츠 관련 동아리 활동과 프로젝트에 적극적으로 참여하여 전공 관련 기초 역량을 탄탄히 쌓음.",
-        behavior: "학급 부회장으로서 책임감 있게 역할을 수행하며, 급우들과의 원활한 소통을 통해 화합을 이끄는 리더십을 보여줌."
-      }
-    }
-  ]);
-  const [selectedStudentId, setSelectedStudentId] = useState<string | null>("test-1");
-  const [activeTab, setActiveTab] = useState<'academic' | 'non-academic' | 'summary'>('summary');
-  const [isProcessing, setIsProcessing] = useState(false);
+  return (
+    <AppProvider>
+      <Shell />
+    </AppProvider>
+  );
+}
 
-  const selectedStudent = students.find(s => s.id === selectedStudentId);
+function Shell() {
+  const { state, dispatch } = useApp();
+  const student = state.students[state.cur] ?? null;
+  const an = useAnalysis(student, state.userDict);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [dark, setDark] = useState(false);
+  /** 직접 입력 창에 적은 내용이 있는지(창을 닫기 전 확인용). ManualInput이 알려 준다. */
+  const manualDirty = useRef(false);
 
-  const handleFileUpload = async (base64: string, mimeType: string) => {
-    setIsProcessing(true);
+  useEffect(() => { restoreTheme(); setDark(isDark()); }, []);
+
+  // 화면(계보도·탐구 방법·상담 노트)이나 학생을 바꾸면 페이지 맨 위에서 시작한다.
+  // 그대로 두면 폰 너비에서 앞 화면의 스크롤 위치(예: 탐구 방법 표 아래쪽)에서 새 화면이 열려 머리 부분이 보이지 않는다.
+  const viewKey = `${state.view}|${state.cur}`;
+  const lastViewKey = useRef(viewKey);
+  useEffect(() => {
+    if (lastViewKey.current === viewKey) return;
+    lastViewKey.current = viewKey;
+    window.scrollTo({ top: 0 });
+  }, [viewKey]);
+
+  // 알림은 2.6초 뒤 사라짐
+  useEffect(() => {
+    if (!state.toast) return;
+    const t = setTimeout(() => dispatch({ type: 'toast', text: null }), 2600);
+    return () => clearTimeout(t);
+  }, [state.toast, dispatch]);
+
+  // 저장하지 않은 메모가 있으면 창 닫기 전에 확인
+  useEffect(() => {
+    const h = (e: BeforeUnloadEvent) => { if (state.dirty && state.students.length) { e.preventDefault(); } };
+    window.addEventListener('beforeunload', h);
+    return () => window.removeEventListener('beforeunload', h);
+  }, [state.dirty, state.students.length]);
+
+  /** 직접 입력 창 닫기. 적은 내용이 있으면 확인을 받는다(한글 입력 중 Esc, 바깥 클릭으로 내용이 사라지지 않게). */
+  const closeManual = useCallback(() => {
+    if (manualDirty.current && !confirm('직접 입력 창에 적은 내용이 있습니다. 닫으면 사라집니다. 닫을까요?')) return;
+    manualDirty.current = false;
+    dispatch({ type: 'closeSide' });
+  }, [dispatch]);
+
+  // Esc: 옆 창 닫기 → 관심 주제 강조 해제 → 넓게 보기 해제. 한글 조합 중(IME) Esc는 글자 취소이므로 건너뛴다.
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.isComposing || e.defaultPrevented) return;
+      if (state.side === 'manual') closeManual();
+      else if (state.side) dispatch({ type: 'closeSide' });
+      else if (state.theme) dispatch({ type: 'setTheme', theme: null });
+      else if (state.wide) dispatch({ type: 'toggleWide', value: false });
+    };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
+  }, [state.side, state.theme, state.wide, dispatch, closeManual]);
+
+  const toast = useCallback((text: string) => dispatch({ type: 'toast', text }), [dispatch]);
+
+  const handleFiles = useCallback(async (files: File[]) => {
+    if (!files.length) return;
+    dispatch({ type: 'setBusy', text: '학생부를 읽는 중입니다' });
     try {
-      const data = await analyzeLifeRecord(base64, mimeType);
-      const newStudent: StudentData = {
-        ...data,
-        id: Math.random().toString(36).substr(2, 9),
-      };
-      setStudents(prev => [newStudent, ...prev]);
-      setSelectedStudentId(newStudent.id);
-    } catch (error) {
-      console.error("Analysis failed:", error);
-      alert("생활기록부 분석에 실패했습니다. 다시 시도해주세요.");
+      const res = await ingestFiles(files, (t) => dispatch({ type: 'setBusy', text: t }));
+      if (res.dicts.length) {
+        let dict = state.userDict;
+        for (const d of res.dicts) dict = mergeUserDict(dict, d);
+        // 새 표현이 없으면(작업 파일에 든 사전이 이미 있는 것과 같으면) 바꾸지 않는다. 그래야 불러오기만 해도 '저장하지 않은 메모' 확인이 뜨지 않는다.
+        if (JSON.stringify(dict) !== JSON.stringify(state.userDict)) {
+          dropAnalysisCache();
+          dispatch({ type: 'setUserDict', dict });
+        }
+      }
+      dispatch({ type: 'addStudents', entries: res.entries, errors: res.errors });
+      if (res.errors.length) toast(`${res.errors.length}개 파일을 읽지 못했습니다. 화면의 안내를 확인해 주세요.`);
+      else if (res.notes.length) toast(res.notes[res.notes.length - 1]);
+      else if (res.entries.length > 1) toast(`${res.entries.length}명의 학생부를 불러왔습니다.`);
+      else if (res.entries.length === 1) toast('학생부를 불러왔습니다.');
     } finally {
-      setIsProcessing(false);
+      dispatch({ type: 'setBusy', text: null });
     }
+  }, [dispatch, state.userDict, toast]);
+
+  const addSample = useCallback(() => {
+    const entry: StudentEntry = { id: uid('sample'), file: '가상 예시', data: sampleStudent(), memo: '', recMemo: {} };
+    dispatch({ type: 'addStudents', entries: [entry] });
+  }, [dispatch]);
+
+  const saveWork = useCallback(() => {
+    if (!state.students.length) return;
+    const now = new Date();
+    // 공백만 남은 기록 메모는 저장하지 않는다
+    const students = state.students.map((s) => ({ ...s, recMemo: Object.fromEntries(Object.entries(s.recMemo || {}).filter(([, t]) => t.trim())) }));
+    download(`탐구분석지도_작업_${todayStamp(now)}.json`, JSON.stringify(makeWorkFile(students, state.userDict, now)));
+    dispatch({ type: 'markSaved' });
+    toast('작업 파일을 저장했습니다. 학생 개인정보가 담긴 파일이니 학교 지침에 따라 안전하게 보관해 주세요.');
+  }, [state.students, state.userDict, dispatch, toast]);
+
+  const wipe = useCallback(() => {
+    if (confirm('불러온 학생부, 분석 결과, 상담 메모를 이 화면에서 모두 지울까요?\n저장하지 않은 메모는 되돌릴 수 없습니다.')) {
+      dropAnalysisCache();
+      dispatch({ type: 'wipe' });
+    }
+  }, [dispatch]);
+
+  // 끌어다 놓기(화면 전체)
+  useEffect(() => {
+    let n = 0;
+    const enter = (e: DragEvent) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { n++; setDragging(true); } };
+    const leave = () => { n = Math.max(0, n - 1); if (!n) setDragging(false); };
+    const over = (e: DragEvent) => e.preventDefault();
+    const drop = (e: DragEvent) => {
+      e.preventDefault(); n = 0; setDragging(false);
+      const fs = [...(e.dataTransfer?.files || [])].filter((f) => /\.(pdf|json)$/i.test(f.name) || f.type === 'application/pdf');
+      if (fs.length) void handleFiles(fs);
+    };
+    document.addEventListener('dragenter', enter);
+    document.addEventListener('dragleave', leave);
+    document.addEventListener('dragover', over);
+    document.addEventListener('drop', drop);
+    return () => {
+      document.removeEventListener('dragenter', enter);
+      document.removeEventListener('dragleave', leave);
+      document.removeEventListener('dragover', over);
+      document.removeEventListener('drop', drop);
+    };
+  }, [handleFiles]);
+
+  const manualDone = useCallback((entry: StudentEntry) => {
+    manualDirty.current = false;
+    dispatch({ type: 'addStudents', entries: [entry], dirty: true });
+    toast('직접 입력한 기록을 분석했습니다.');
+  }, [dispatch, toast]);
+  const onManualDirty = useCallback((d: boolean) => { manualDirty.current = d; }, []);
+  const manualInput = <ManualInput onDone={manualDone} onCancel={closeManual} onDirty={onManualDirty} />;
+
+  const hiddenInput = (
+    <input ref={fileInput} type="file" accept=".pdf,.json,application/pdf" multiple hidden onChange={(e) => { const fs = [...(e.target.files || [])]; e.target.value = ''; void handleFiles(fs); }} />
+  );
+
+  if (!student || !an) {
+    return (
+      <>
+        <Landing
+          onFiles={(fs) => void handleFiles(fs)}
+          onSample={addSample}
+          onManual={() => dispatch({ type: 'openSide', side: 'manual' })}
+          errors={state.errors}
+          onClearErrors={() => dispatch({ type: 'setErrors', errors: [] })}
+        />
+        {state.side === 'manual' ? (
+          <div className="fixed inset-0 z-50 flex justify-end bg-scrim" onClick={closeManual}>
+            {/* 첫 화면에는 상단 바가 없어 --topbar-h가 0이므로 md 이상에서도 옆 창이 화면 높이를 가득 채운다 */}
+            <div onClick={(e) => e.stopPropagation()} className="flex h-full max-w-full">
+              <SideDrawer open kicker="붙여 넣기" title="직접 입력" onClose={closeManual} defaultWidth={620}>
+                {manualInput}
+              </SideDrawer>
+            </div>
+          </div>
+        ) : null}
+        {dragging ? <DropHint /> : null}
+        <Busy text={state.busy} />
+        <Toast text={state.toast} />
+        {hiddenInput}
+      </>
+    );
+  }
+
+  const selRec = state.sel ? an.recs.find((r) => r.id === state.sel) : null;
+  // 이름 가리기는 옆 창 머리글에도 적용한다(파일 이름은 StudentHead가 따로 가린다)
+  const shownName = state.blind ? blindName(student.data.meta.name || '') : (student.data.meta.name || '');
+  const sideTitle: Record<string, { kicker: string; title: string; width?: number }> = {
+    rec: { kicker: selRec ? `${selRec.kind} · ${LANE[selRec.lane]?.label ?? selRec.lane} · ${semLabel(selRec)}` : '', title: selRec?.subj || '' },
+    mlist: { kicker: '근거 문장', title: '탐구 방법', width: Math.max(360, Math.min(620, Math.round(window.innerWidth * 0.42))) },
+    dict: { kicker: shownName, title: '표현 사전' },
+    note: { kicker: shownName, title: '상담 노트' },
+    manual: { kicker: '붙여 넣기', title: '직접 입력', width: 620 },
   };
+  const side = state.side ? sideTitle[state.side] : null;
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
-      {/* Sidebar - Student List */}
-      <aside className="w-72 bg-white border-r border-slate-200 flex flex-col shrink-0">
-        <div className="p-4 border-bottom border-slate-200 bg-primary text-white">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 bg-white/20 rounded flex items-center justify-center">
-              <FileText className="w-5 h-5" />
+    <div className="flex min-h-screen flex-col">
+      {!state.wide ? (
+        <TopBar
+          students={state.students}
+          cur={state.cur}
+          view={state.view}
+          side={state.side}
+          blind={state.blind}
+          dark={dark}
+          onSelect={(i) => dispatch({ type: 'selectStudent', index: i })}
+          onView={(v) => dispatch({ type: 'setView', view: v })}
+          onAddFiles={() => fileInput.current?.click()}
+          onDict={() => dispatch(state.side === 'dict' ? { type: 'closeSide' } : { type: 'openSide', side: 'dict' })}
+          onNotes={() => dispatch(state.side === 'note' ? { type: 'closeSide' } : { type: 'openSide', side: 'note' })}
+          onBlind={() => dispatch({ type: 'toggleBlind' })}
+          onSave={saveWork}
+          onPrint={() => setTimeout(() => window.print(), 60)}
+          onWipe={wipe}
+          onTheme={() => setDark(toggleTheme() === 'dark')}
+        />
+      ) : null}
+      <div className="flex min-h-0 flex-1">
+        <main className="min-w-0 flex-1 px-4 py-4 md:px-6">
+          {state.errors.length ? (
+            <div className="noprint mb-3 rounded-md border border-note-yellow-ink/40 bg-note-yellow/20 px-4 py-2 text-[13px]">
+              {state.errors.map((e, i) => <div key={i}><b>{e.file}</b>: {e.msg}</div>)}
+              <button className="btn ghost sm mt-1" type="button" onClick={() => dispatch({ type: 'setErrors', errors: [] })}>닫기</button>
             </div>
-            <h1 className="font-bold text-lg tracking-tight">평가관리시스템</h1>
-          </div>
-          <div className="space-y-1">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-white/60">평가 현황</h2>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="bg-white/10 p-2 rounded">
-                <p className="text-white/60 text-[10px]">배정인원</p>
-                <p className="font-bold">{students.length}</p>
-              </div>
-              <div className="bg-white/10 p-2 rounded">
-                <p className="text-white/60 text-[10px]">진행률</p>
-                <p className="font-bold">0%</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="지원자 검색..." 
-              className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-md text-sm focus:ring-2 focus:ring-primary/20 transition-all"
-            />
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 sticky top-0 z-10">
-              <tr className="text-slate-500 border-b border-slate-200">
-                <th className="px-4 py-2 text-left font-medium">순번</th>
-                <th className="px-4 py-2 text-left font-medium">가번호</th>
-                <th className="px-4 py-2 text-left font-medium">평가</th>
-              </tr>
-            </thead>
-            <tbody>
-              {students.map((student, idx) => (
-                <tr 
-                  key={student.id}
-                  onClick={() => setSelectedStudentId(student.id)}
-                  className={cn(
-                    "border-b border-slate-100 cursor-pointer transition-colors",
-                    selectedStudentId === student.id ? "bg-primary/5 border-l-4 border-l-primary" : "hover:bg-slate-50"
-                  )}
-                >
-                  <td className="px-4 py-3 text-slate-500">{idx + 1}</td>
-                  <td className="px-4 py-3 font-medium">{student.examNo}</td>
-                  <td className="px-4 py-3">
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">대기</span>
-                  </td>
-                </tr>
-              ))}
-              {students.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="px-4 py-12 text-center text-slate-400 italic">
-                    업로드된 학생이 없습니다.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-              <span className="w-2 h-2 rounded-full bg-accent-green"></span>
-              온라인
-            </div>
-            <div className="h-4 w-px bg-slate-200"></div>
-            <div className="flex items-center gap-4">
-              <button className="p-2 hover:bg-slate-100 rounded-md transition-colors text-slate-500" title="확대">
-                <Maximize2 className="w-4 h-4" />
-              </button>
-              <button className="p-2 hover:bg-slate-100 rounded-md transition-colors text-slate-500" title="도움말">
-                <HelpCircle className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-sm">
-              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
-                <User className="w-4 h-4 text-slate-600" />
-              </div>
-              <span className="font-medium">입학사정관</span>
-              <span className="text-slate-400">님</span>
-            </div>
-            <button className="p-2 hover:bg-red-50 text-red-500 rounded-md transition-colors">
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </header>
-
-        {/* Content Area */}
-        <div className="flex-1 flex overflow-hidden">
-          <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/50">
-            {selectedStudent ? (
-              <>
-                {/* Student Info Banner */}
-                <div className="bg-white border-b border-slate-200 p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex gap-8">
-                      <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">가번호</p>
-                        <p className="text-xl font-bold text-primary">{selectedStudent.examNo}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">성명</p>
-                        <p className="text-xl font-bold text-slate-900">{selectedStudent.name}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">고교명</p>
-                        <p className="text-xl font-bold text-slate-900">{selectedStudent.school}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button className="px-4 py-2 bg-white border border-slate-200 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors flex items-center gap-2">
-                        <ArrowLeftRight className="w-4 h-4" />
-                        대상자비교
-                      </button>
-                      <button className="px-4 py-2 bg-white border border-slate-200 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors flex items-center gap-2">
-                        <LayoutGrid className="w-4 h-4" />
-                        듀얼창 ON
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tabs */}
-                <div className="px-6 pt-4">
-                  <div className="flex border-b border-slate-200 gap-8">
-                    <button 
-                      onClick={() => setActiveTab('summary')}
-                      className={cn(
-                        "pb-3 text-sm font-medium transition-all relative",
-                        activeTab === 'summary' ? "text-primary" : "text-slate-500 hover:text-slate-700"
-                      )}
-                    >
-                      지원자 요약정보
-                      {activeTab === 'summary' && <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
-                    </button>
-                    <button 
-                      onClick={() => setActiveTab('academic')}
-                      className={cn(
-                        "pb-3 text-sm font-medium transition-all relative",
-                        activeTab === 'academic' ? "text-primary" : "text-slate-500 hover:text-slate-700"
-                      )}
-                    >
-                      학생부(교과)
-                      {activeTab === 'academic' && <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
-                    </button>
-                    <button 
-                      onClick={() => setActiveTab('non-academic')}
-                      className={cn(
-                        "pb-3 text-sm font-medium transition-all relative",
-                        activeTab === 'non-academic' ? "text-primary" : "text-slate-500 hover:text-slate-700"
-                      )}
-                    >
-                      학생부(교과 외)
-                      {activeTab === 'non-academic' && <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Tab Content */}
-                <div className="flex-1 overflow-y-auto p-6">
-                  <AnimatePresence mode="wait">
-                    {activeTab === 'summary' && (
-                      <motion.div 
-                        key="summary"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="space-y-6"
-                      >
-                        <div className="grid grid-cols-3 gap-6">
-                          <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
-                            <h3 className="text-sm font-bold text-primary mb-4 flex items-center gap-2">
-                              <div className="w-1.5 h-4 bg-primary rounded-full"></div>
-                              학업역량 핵심키워드
-                            </h3>
-                            <div className="flex flex-wrap gap-2">
-                              {selectedStudent.keywords.academic.map((kw, i) => (
-                                <span key={i} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-medium">
-                                  {kw}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
-                            <h3 className="text-sm font-bold text-primary mb-4 flex items-center gap-2">
-                              <div className="w-1.5 h-4 bg-primary rounded-full"></div>
-                              진로역량 핵심키워드
-                            </h3>
-                            <div className="flex flex-wrap gap-2">
-                              {selectedStudent.keywords.career.map((kw, i) => (
-                                <span key={i} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-medium">
-                                  {kw}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
-                            <h3 className="text-sm font-bold text-primary mb-4 flex items-center gap-2">
-                              <div className="w-1.5 h-4 bg-primary rounded-full"></div>
-                              공동체역량 핵심키워드
-                            </h3>
-                            <div className="flex flex-wrap gap-2">
-                              {selectedStudent.keywords.community.map((kw, i) => (
-                                <span key={i} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-medium">
-                                  {kw}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
-                          <h3 className="text-sm font-bold text-primary mb-4 flex items-center gap-2">
-                            <div className="w-1.5 h-4 bg-primary rounded-full"></div>
-                            종합 의견 요약
-                          </h3>
-                          <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
-                            {selectedStudent.details.behavior}
-                          </p>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {activeTab === 'academic' && (
-                      <motion.div 
-                        key="academic"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="space-y-8"
-                      >
-                        <section>
-                          <h3 className="text-base font-bold text-slate-900 mb-4">교과별 추이도</h3>
-                          <GradeTrendChart data={selectedStudent.grades} />
-                        </section>
-
-                        <section>
-                          <h3 className="text-base font-bold text-slate-900 mb-4">성적현황[교과]</h3>
-                          <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-                            <table className="w-full text-sm">
-                              <thead className="bg-slate-50 border-b border-slate-200">
-                                <tr>
-                                  <th className="px-4 py-3 text-left font-bold text-slate-700">교과구분</th>
-                                  <th className="px-4 py-3 text-center font-bold text-slate-700">전체평균</th>
-                                  <th className="px-4 py-3 text-center font-bold text-slate-700">1-1</th>
-                                  <th className="px-4 py-3 text-center font-bold text-slate-700">1-2</th>
-                                  <th className="px-4 py-3 text-center font-bold text-slate-700">2-1</th>
-                                  <th className="px-4 py-3 text-center font-bold text-slate-700">2-2</th>
-                                  <th className="px-4 py-3 text-center font-bold text-slate-700">3-1</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {['전과목', '국어', '영어', '수학', '사회', '과학'].map((subject) => {
-                                  const key = subject === '전과목' ? 'all' : 
-                                              subject === '국어' ? 'korean' :
-                                              subject === '영어' ? 'english' :
-                                              subject === '수학' ? 'math' :
-                                              subject === '사회' ? 'social' : 'science';
-                                  
-                                  const avg = (selectedStudent.grades.reduce((acc, g) => acc + (g[key as keyof GradeData] as number || 0), 0) / 5).toFixed(2);
-
-                                  return (
-                                    <tr key={subject} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                                      <td className="px-4 py-3 font-medium text-slate-900">{subject}</td>
-                                      <td className="px-4 py-3 text-center font-bold text-secondary">{avg}</td>
-                                      {selectedStudent.grades.map((g, i) => (
-                                        <td key={i} className="px-4 py-3 text-center text-slate-600">
-                                          {g[key as keyof GradeData] || '-'}
-                                        </td>
-                                      ))}
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </section>
-                      </motion.div>
-                    )}
-
-                    {activeTab === 'non-academic' && (
-                      <motion.div 
-                        key="non-academic"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="space-y-6"
-                      >
-                        <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
-                          <h3 className="text-sm font-bold text-primary mb-4 flex items-center gap-2">
-                            <div className="w-1.5 h-4 bg-primary rounded-full"></div>
-                            창의적 체험활동 요약
-                          </h3>
-                          <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
-                            {selectedStudent.details.nonAcademic}
-                          </p>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center p-12">
-                <div className="max-w-md w-full">
-                  <FileUpload onUpload={handleFileUpload} isProcessing={isProcessing} />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right Sidebar - Evaluation Form */}
-          <aside className="w-80 bg-white border-l border-slate-200 flex flex-col shrink-0">
-            <div className="p-4 border-b border-slate-200 bg-slate-50">
-              <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                <CheckSquare className="w-4 h-4 text-primary" />
-                평가 입력
-              </h3>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
-              {/* Academic Competency */}
-              <div className="space-y-3">
-                <label className="text-sm font-bold text-slate-700 flex items-center justify-between">
-                  학업역량
-                  <span className="text-[10px] font-normal text-slate-400">40%</span>
-                </label>
-                <div className="grid grid-cols-4 gap-1">
-                  {['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C', 'D'].map(grade => (
-                    <button 
-                      key={grade}
-                      className="py-2 text-xs border border-slate-200 rounded hover:bg-primary hover:text-white hover:border-primary transition-all"
-                    >
-                      {grade}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Career Competency */}
-              <div className="space-y-3">
-                <label className="text-sm font-bold text-slate-700 flex items-center justify-between">
-                  진로역량
-                  <span className="text-[10px] font-normal text-slate-400">35%</span>
-                </label>
-                <div className="grid grid-cols-4 gap-1">
-                  {['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C', 'D'].map(grade => (
-                    <button 
-                      key={grade}
-                      className="py-2 text-xs border border-slate-200 rounded hover:bg-primary hover:text-white hover:border-primary transition-all"
-                    >
-                      {grade}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Community Competency */}
-              <div className="space-y-3">
-                <label className="text-sm font-bold text-slate-700 flex items-center justify-between">
-                  공동체역량
-                  <span className="text-[10px] font-normal text-slate-400">25%</span>
-                </label>
-                <div className="grid grid-cols-4 gap-1">
-                  {['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C', 'D'].map(grade => (
-                    <button 
-                      key={grade}
-                      className="py-2 text-xs border border-slate-200 rounded hover:bg-primary hover:text-white hover:border-primary transition-all"
-                    >
-                      {grade}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Total Comment */}
-              <div className="space-y-3">
-                <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-slate-400" />
-                  서류평가 총평
-                </label>
-                <textarea 
-                  rows={6}
-                  placeholder="평가 의견을 입력하세요..."
-                  className="w-full p-3 text-sm border border-slate-200 rounded-md focus:ring-2 focus:ring-primary/20 outline-none resize-none"
-                ></textarea>
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-slate-200">
-              <button className="w-full py-3 bg-primary text-white rounded-md font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20">
-                최종완료
-              </button>
-            </div>
-          </aside>
-        </div>
-      </main>
+          ) : null}
+          {!state.wide ? <StudentHead an={an} student={student} blind={state.blind} /> : null}
+          {state.view === 'tree' ? <TreeBoard an={an} student={student} /> : null}
+          {state.view === 'method' ? <MethodView an={an} student={student} /> : null}
+          {state.view === 'note' ? <NotesView an={an} student={student} /> : null}
+          <PrintNotes an={an} student={student} />
+        </main>
+        {side ? (
+          <SideDrawer open kicker={side.kicker} title={side.title} defaultWidth={side.width} onClose={state.side === 'manual' ? closeManual : () => dispatch({ type: 'closeSide' })}>
+            {state.side === 'rec' && state.sel ? <RecordDrawer an={an} student={student} id={state.sel} /> : null}
+            {state.side === 'mlist' && state.mSel ? <MethodList an={an} student={student} sel={state.mSel} /> : null}
+            {state.side === 'dict' ? <DictPanel an={an} student={student} /> : null}
+            {state.side === 'note' ? <NotesView an={an} student={student} compact /> : null}
+            {state.side === 'manual' ? manualInput : null}
+          </SideDrawer>
+        ) : null}
+      </div>
+      {dragging ? <DropHint /> : null}
+      <Busy text={state.busy} />
+      <Toast text={state.toast} />
+      {hiddenInput}
     </div>
+  );
+}
+
+function DropHint() {
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[65] flex items-center justify-center border-4 border-dashed border-ink bg-surface/70 text-[18px] font-bold">
+      여기에 학생부 PDF를 놓으세요
+    </div>
+  );
+}
+
+/** 인쇄 전용: 상담 메모와 기록별 메모 */
+function PrintNotes({ an, student }: { an: ReturnType<typeof useAnalysis> & object; student: StudentEntry }) {
+  const rm = Object.entries(student.recMemo || {}).filter(([id, t]) => t.trim() && an.recs.some((r) => r.id === id));
+  if (!(student.memo || '').trim() && !rm.length) return null;
+  return (
+    <section className="hidden print:block mt-6 text-[12px]">
+      <h2 className="text-[15px] font-bold">상담 메모</h2>
+      {(student.memo || '').trim() ? <p className="whitespace-pre-wrap">{student.memo}</p> : null}
+      {rm.length ? (
+        <ul className="list-disc pl-5">
+          {rm.map(([id, t]) => { const r = an.recs.find((x) => x.id === id)!; return <li key={id}><b>{r.subj} ({semLabel(r)})</b> {t}</li>; })}
+        </ul>
+      ) : null}
+    </section>
   );
 }

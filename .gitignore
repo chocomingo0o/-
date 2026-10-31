@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# 학생 개인정보 보호: 학생부와 작업 파일은 절대 커밋하지 않음
+*.pdf
+!docs/**/*.pdf
+탐구분석지도_작업_*.json
+.review-tmp/
+*.tsbuildinfo
