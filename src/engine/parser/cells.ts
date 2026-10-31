@@ -93,7 +93,8 @@ const STANDALONE_B = /^(?:후|중|등|및)[,.]?$/;
  * a = 앞 줄의 끝 낱말, b = 다음 줄의 첫 낱말.
  *  0) 날짜('2024.|03.28.')와 동아리 시간('…탐구부)|(34시간)')은 붙이고, 기간 표시 '-', '~' 앞뒤는 띄운다
  *  1) 다음 줄이 문장부호로 시작 → 붙임
- *  2) b가 조사나 어미 조각(BOUND_TOKEN), 또는 연결 어미로 끝나지 않는 낱말 뒤의 '이' → 붙임
+ *  2) a가 조사(을, 를, 에서, 에게, 으로)로 끝나고 b가 '하는, 함, 한'처럼 '하다'의 꼴이면 → 띄움
+ *     b가 조사나 어미 조각(BOUND_TOKEN), 또는 연결 어미로 끝나지 않는 낱말 뒤의 '이' → 붙임
  *     b가 홀로 쓰이는 '후, 중, 등, 및'이고 a가 두 글자 이상 → 띄움
  *  3) a가 문장부호로 끝남 → 띄움
  *  4) 사전의 어떤 낱말 안에 a+(b의 첫 글자)가 들어 있음 → 붙임(예: '교과|서에' ← 문서의 '교과서')
@@ -116,6 +117,8 @@ export function decideJoin(prevLine: string, nextLine: string, lex?: JoinLexicon
   // '한'은 '~한'의 조각이기도 하고 '한 번, 한 달'의 관형사이기도 하다. 뒤에 세는 말이 오면 관형사로 본다.
   const second = next.split(/\s+/)[1] ?? '';
   const isCounted = b === '한' && /^(?:번|달|명|가지|권|개|사람|학기|해|차례|걸음|편|단계|시간|주|번째|곳|문장|쪽)/.test(second);
+  // 조사로 끝난 낱말 뒤의 '하는, 함, 한 …'은 앞 낱말에 붙는 어미가 아니라 따로 쓰는 동사다('사이에서|하는', '정리를|함')
+  if (a.length >= 2 && /(?:을|를|에서|에게|으로)$/.test(a) && /^(?:하|한|할|함|해|했)/.test(b)) return true;
   if (b && BOUND_TOKEN.test(b) && !isCounted) return false;
   if (b === '이' && bRaw === '이' && a && !PUNCT_END.test(aRaw) && !CONNECTIVE_END.test(a)) return false;
   if (STANDALONE_B.test(bRaw) && a.length >= 2) return true;

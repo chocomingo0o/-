@@ -1,13 +1,17 @@
 /**
  * 사전 컴파일과 탐지: 탐구 방법 17종, 과학 탐구 과정 기능 8종, 관심 분야.
  *
- * - compileMethods(userDict) : dict/methods.ts의 terms/exclude와 교사가 추가한 표현(UserDict)을 정규식으로 만든다.
+ * - compileMethods(userDict) : dict/methods.ts의 terms/exclude/weak/cue와 교사가 추가한 표현(UserDict)을 정규식으로 만든다.
  * - masked(s, cm)            : 제외 표현(exclude) 구간을 같은 길이의 공백으로 지운다(위치 보존).
- * - methodHits(s, methods)   : 문장에서 찾은 방법 키 목록(사전 순서 = 수준 내림차순).
+ * - methodHits(s, methods)   : 문장 하나에서 찾은 방법 키 목록(사전 순서 = 수준 내림차순).
  * - methodMarks(text, methods): 원문 하이라이트용 구간. 사용자 사전 매치는 user:true.
+ *                              본문을 sentences()로 나눠 문장마다 methodHits와 같은 규칙으로 판정하므로 둘이 늘 맞는다.
  * - compileSkills / skillHits / skillMarks : 과학 탐구 과정 기능(dict/skills.ts)도 같은 방식.
  * - compileFields / fieldsOf : 관심 분야(dict/fields.ts). 낱말 글자 사이에 공백을 허용하고,
  *                              서로 다른 낱말 2개 이상 또는 3회 이상 나온 분야만 인정한다(상위 3개).
+ *
+ * 조건부 표현(weak, 지금은 실험·측정만)은 제외 구간을 지운 같은 문장에 수행 단서(cue)나 조건 없는 표현(terms)이
+ * 맞을 때만 센다. 교사가 추가한 표현은 조건 없이 센다.
  *
  * 정규식은 모두 'g' 플래그를 쓰므로 사용 직전과 직후에 lastIndex를 0으로 돌려 놓는다.
  * 이 파일은 DOM에 의존하지 않는다.
@@ -16,6 +20,7 @@ import type { FieldHit, MethodDef, MethodKey, SkillDef, SkillKey, UserDict } fro
 import { METHOD, METHODS } from '../dict/methods';
 import { SKILLS } from '../dict/skills';
 import { FIELDS, FIELD_KEYS } from '../dict/fields';
+import { sentences } from './text';
 
 /* ───────────────────────── 공통 도구 ───────────────────────── */
 
@@ -70,6 +75,8 @@ export interface CompiledMethod {
   def: MethodDef;
   re: RegExp;              // terms, 'g'
   ex: RegExp | null;       // exclude, 'g'
+  weak: RegExp | null;     // 조건부 표현, 'g'
+  cue: RegExp | null;      // 조건부 표현을 세게 하는 수행 단서, 'g'
   user: RegExp | null;     // 교사 추가 표현, 'g'
 }
 
@@ -96,6 +103,8 @@ export function compileMethods(userDict?: UserDict): CompiledMethod[] {
       def,
       re: new RegExp('(?:' + def.terms.join('|') + ')', 'g'),
       ex: def.exclude && def.exclude.length ? new RegExp('(?:' + def.exclude.join('|') + ')', 'g') : null,
+      weak: def.weak && def.weak.length ? new RegExp('(?:' + def.weak.join('|') + ')', 'g') : null,
+      cue: def.cue && def.cue.trim() ? new RegExp('(?:' + def.cue + ')', 'g') : null,
       user: joinRx(terms.map(userTerm)),
     };
   });
@@ -107,13 +116,26 @@ export function masked(s: string, cm: CompiledMethod): string {
 }
 
 /**
- * 문장에서 찾은 방법. 사전 표현은 제외 구간을 지운 문장에, 교사 추가 표현은 원문에 적용한다
- * (교사가 직접 넣은 표현은 제외 규칙보다 우선한다).
+ * 제외 구간을 지운 문장 t에서 조건부 표현을 셀 수 있는지. 수행 단서(cue)나 조건 없는 표현(terms)이 같은 문장에 있어야 한다.
+ * strong은 terms가 이미 맞았는지(호출한 쪽이 이미 검사했으면 넘겨 준다).
+ */
+function weakAllowed(t: string, cm: CompiledMethod, strong: boolean): boolean {
+  if (!cm.weak) return false;
+  return strong || (cm.cue !== null && testOnce(cm.cue, t));
+}
+
+/**
+ * 문장 하나에서 찾은 방법. 사전 표현은 제외 구간을 지운 문장에, 교사 추가 표현은 원문에 적용한다
+ * (교사가 직접 넣은 표현은 제외 규칙과 수행 단서 조건보다 우선한다).
+ * 조건부 표현(weak)은 같은 문장에 수행 단서(cue)가 있을 때만 센다. 여러 문장을 한꺼번에 넘기면 단서가
+ * 다른 문장의 조건부 표현까지 살리므로, 본문은 sentences()로 나눠 문장마다 부른다(methodMarks가 그렇게 한다).
  */
 export function methodHits(s: string, methods: CompiledMethod[]): MethodKey[] {
   const out: MethodKey[] = [];
   for (const cm of methods) {
-    let ok = testOnce(cm.re, masked(s, cm));
+    const t = masked(s, cm);
+    let ok = testOnce(cm.re, t);
+    if (!ok && cm.weak && testOnce(cm.weak, t)) ok = weakAllowed(t, cm, false);
     if (!ok && cm.user) ok = testOnce(cm.user, s);
     if (ok) out.push(cm.def.key);
   }
@@ -123,13 +145,23 @@ export function methodHits(s: string, methods: CompiledMethod[]): MethodKey[] {
 /**
  * 원문 하이라이트용 구간. 같은 방법 안에서 겹치는 구간은 넓은 것 하나만 남긴다.
  * 서로 다른 방법의 겹침은 그대로 두고, 화면에 그릴 때(index.ts의 highlightSegments) 정리한다.
+ * 본문을 엔진과 같은 문장 경계(sentences)로 나누고, 문장마다 methodHits와 같은 규칙(제외 구간, 조건부 표현과 수행 단서)을
+ * 적용한다. 그래서 어떤 문장에 형광 표시가 있으면 그 문장의 methodHits에도 그 방법이 있고, 그 반대도 같다.
  */
 export function methodMarks(text: string, methods: CompiledMethod[]): { a: number; b: number; key: MethodKey; user: boolean }[] {
   const out: { a: number; b: number; key: MethodKey; user: boolean }[] = [];
+  const sents = sentences(text);
   for (const cm of methods) {
     const marks: { a: number; b: number; key: MethodKey; user: boolean }[] = [];
-    for (const m of scan(cm.re, masked(text, cm))) marks.push({ a: m.a, b: m.b, key: cm.def.key, user: false });
-    if (cm.user) for (const m of scan(cm.user, text)) marks.push({ a: m.a, b: m.b, key: cm.def.key, user: true });
+    for (const o of sents) {
+      const t = masked(o.s, cm);
+      const strong = scan(cm.re, t);
+      for (const m of strong) marks.push({ a: o.a + m.a, b: o.a + m.b, key: cm.def.key, user: false });
+      if (cm.weak && weakAllowed(t, cm, strong.length > 0)) {
+        for (const m of scan(cm.weak, t)) marks.push({ a: o.a + m.a, b: o.a + m.b, key: cm.def.key, user: false });
+      }
+      if (cm.user) for (const m of scan(cm.user, o.s)) marks.push({ a: o.a + m.a, b: o.a + m.b, key: cm.def.key, user: true });
+    }
     out.push(...dedupe(marks));
   }
   return out.sort((x, y) => x.a - y.a || y.b - x.b);

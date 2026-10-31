@@ -60,8 +60,12 @@ const lvOf = (k: MethodKey): number => METHOD[k].lv;
 const maxLv = (r: Rec): number => r.methods.reduce((m, k) => Math.max(m, lvOf(k)), 0);
 
 /** 명세 4.3의 점수식. 결과의 ms, rf를 바탕으로 다시 계산한다(사전이 바뀌어도 식 자체는 검증된다). */
+/** 따옴표로 탐구 주제를 밝힌 문장(1점). depth.ts의 TOPIC_QUOTE와 같은 꼴 */
+const TOPIC_QUOTE = /[‘'“"][^’'”"]{3,60}[’'”"]\s*(?:을|를|이라는|라는)?\s*(?:탐구\s*)?주제|주제로\s*[‘'“"]/;
+
 function expectedScore(s: { s: string; ms: MethodKey[]; rf: boolean }): number {
-  return s.ms.reduce((a, k) => a + (lvOf(k) >= 3 ? 2 : 1), 0) + (s.rf ? 2 : 0) + (INQ_RX.test(s.s) ? 1 : 0) + (/[‘'“"『]/.test(s.s) ? 0.5 : 0);
+  const quote = TOPIC_QUOTE.test(s.s) ? 1 : /[‘'“"『]/.test(s.s) ? 0.5 : 0;
+  return s.ms.reduce((a, k) => a + (lvOf(k) >= 3 ? 2 : 1), 0) + (s.rf ? 2 : 0) + (INQ_RX.test(s.s) ? 1 : 0) + quote;
 }
 
 const CTX = buildCtx(emptyStudent());
@@ -345,8 +349,11 @@ describe('깊이 1~4', () => {
 /* ───────────────────────── 점수, 후속, 핵심 문장, 활동 흐름 ───────────────────────── */
 
 describe('문장 점수와 후속 탐구', () => {
-  it('sc = Σ(3단계 2, 그 외 1) + 성찰 2 + 탐구 동사 1 + 따옴표 0.5', () => {
-    const r = run('예상과 달리 결과가 다르게 나와 오차의 원인을 분석하고 재실험함. ‘효소의 최적 온도’를 주제로 보고서를 작성함.', CTX);
+  it('sc = Σ(3단계 2, 그 외 1) + 성찰 2 + 탐구 동사 1 + 따옴표 0.5(따옴표로 주제를 밝히면 1)', () => {
+    const r = run(
+      '예상과 달리 결과가 다르게 나와 오차의 원인을 분석하고 재실험함. ‘효소의 최적 온도’ 보고서를 작성함. ‘효소의 최적 온도’를 주제로 보고서를 작성함.',
+      CTX,
+    );
     const a = r.sents[0];
     expect(a.ms).toContain('experiment');
     expect(a.rf).toBe(true);
@@ -355,6 +362,18 @@ describe('문장 점수와 후속 탐구', () => {
     const b = r.sents[1];
     expect(b.sc % 1).toBe(0.5); // 따옴표 가산
     expect(b.sc).toBe(expectedScore(b));
+    // 같은 문장에 '를 주제로'가 붙으면 주제 문장이므로 0.5점을 더 받는다
+    const c = r.sents[2];
+    expect(c.ms).toEqual(b.ms);
+    expect(c.sc).toBe(b.sc + 0.5);
+    expect(c.sc).toBe(expectedScore(c));
+  });
+  it("맨몸 '탐구'가 방법에서 빠져도 따옴표로 주제를 밝힌 문장은 핵심 문장 낱말(ktf)에 남는다", () => {
+    const r = run('‘온도에 따른 아밀레이스 활성 변화’를 주제로 모둠 탐구를 설계함. 수업 시간에 성실히 참여함.', CTX);
+    const s0 = r.sents[0];
+    expect(s0.ms).not.toContain('analysis');
+    expect(s0.sc).toBe(2); // 탐구 동사 1 + 주제 문장 1
+    expect(r.ktf.has('아밀레이스')).toBe(true);
   });
   it('fu: 첫 문장은 후속이 될 수 없고, 후속 단서가 있는 뒤 문장만 fu', () => {
     const r = run('더 나아가 관련 자료를 추가로 조사하여 정리함. 더 나아가 손 씻기 습관의 역할을 추가로 조사하여 발표 끝에 덧붙임. 수업에 성실히 임함.', CTX);

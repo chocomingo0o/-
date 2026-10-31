@@ -7,6 +7,8 @@ import {
   compileFields, compileMethods, compileSkills, escapeRegExp, fieldsOf, isMethodKey,
   masked, methodHits, methodMarks, skillHits, skillMarks,
 } from './methods';
+import { sentences } from './text';
+import { sampleStudent } from '../../fixtures/sample';
 
 const M = compileMethods();
 
@@ -139,10 +141,13 @@ describe('methodMarks', () => {
   it('제외 구간은 표시하지 않고, 같은 방법 안에서 겹치는 구간은 하나만', () => {
     const marks = methodMarks('동물 실험의 윤리를 토론함.', M);
     expect(marks.some((m) => m.key === 'experiment')).toBe(false);
-    const dup = methodMarks('실험을 실험을 실험을', M).filter((m) => m.key === 'experiment');
+    // '실험을 수행'(조건 없는 표현)이 '실험을'(조건부 표현)을 품으므로 문장마다 넓은 구간 하나만 남는다
+    const text = '실험을 수행함. 실험을 수행함. 실험을 수행함.';
+    const dup = methodMarks(text, M).filter((m) => m.key === 'experiment');
     expect(dup).toHaveLength(3);
     const spans = dup.map((m) => `${m.a}-${m.b}`);
     expect(new Set(spans).size).toBe(3);
+    for (const m of dup) expect(text.slice(m.a, m.b)).toBe('실험을 수행');
   });
   it('빈 본문은 빈 배열', () => {
     expect(methodMarks('', M)).toEqual([]);
@@ -288,5 +293,116 @@ describe('methodHits: 검수 뒤 보강(남의 모형 해석, 설계라는 말, 
   });
   it("'기후 정의의 관점에서 선진국의 책임을 설명함'처럼 목적어가 끼어도 개념 분석·해석이다", () => {
     expect(hits('기후 정의의 관점에서 선진국의 책임을 설명함.')).toContain('analysis');
+  });
+});
+
+/* ───────────────────────── 실험·측정의 조건부 표현과 수행 단서 ───────────────────────── */
+describe('조건부 표현(weak)과 수행 단서(cue)', () => {
+  const exp = (s: string, ms = M): boolean => methodHits(s, ms).includes('experiment');
+  const expMarks = (text: string, ms = M): string[] =>
+    methodMarks(text, ms).filter((m) => m.key === 'experiment').map((m) => text.slice(m.a, m.b));
+
+  it('실험·측정만 weak와 cue를 컴파일하고 모두 g 플래그다', () => {
+    const ex = M.find((c) => c.def.key === 'experiment')!;
+    expect(ex.weak).toBeInstanceOf(RegExp);
+    expect(ex.cue).toBeInstanceOf(RegExp);
+    expect(ex.weak!.global).toBe(true);
+    expect(ex.cue!.global).toBe(true);
+    for (const c of M) if (c.def.key !== 'experiment') {
+      expect(c.weak).toBeNull();
+      expect(c.cue).toBeNull();
+    }
+  });
+  it('개념만 다룬 문장은 실험·측정이 아니고 형광 표시도 없다', () => {
+    const concept = [
+      'BTB 용액의 색이 이산화 탄소 농도에 따라 변하는 까닭을 산성도 변화로 이해함.',
+      '멘델이 완두 교배 실험으로 유전 법칙을 밝힌 과정을 학습함.',
+      '검정말의 광합성 속도에 빛의 세기가 미치는 영향을 다룬 탐구 사례를 읽고 정리함.',
+      '진로 탐색 활동에서 비커와 피펫 같은 실험 기구의 쓰임을 정리함.',
+      '수행평가로 PCR의 단계별 온도 조건을 조사함.',
+      // 학습이나 발표에도 쓰는 동사가 꼬리에 붙은 개념 문장
+      '현미경의 발달 과정을 조사하여 탐구 노트에 기록함.',
+      'PCR이 DNA를 증폭하는 원리를 그림을 넣어 단계별로 정리함.',
+      '전기영동에서 DNA가 음전하를 띠어 양극 쪽으로 이동하는 원리를 그림으로 정리해 발표 자료에 넣어 설명함.',
+      '증류 장치에서 혼합물을 가열하여 끓는점 차이로 성분을 분리하는 원리를 정리함.',
+      '교과서에 실린 멘델의 교배 실험 결과를 원 논문에서 직접 확인함.',
+    ];
+    for (const s of concept) {
+      expect(exp(s), s).toBe(false);
+      expect(expMarks(s), s).toEqual([]);
+    }
+  });
+  it('직접 한 문장은 실험·측정이고 기구, 시약 이름도 함께 칠한다', () => {
+    const s = '양파 표피를 떼어 아세트산 카민 용액으로 염색한 뒤 현미경으로 세포를 관찰함.';
+    expect(exp(s)).toBe(true);
+    expect(expMarks(s)).toEqual(['아세트산 카민', '현미경', '관찰함']);
+    const t = 'BTB 용액에 빨대로 숨을 불어 넣어 색이 파란색에서 노란색으로 바뀌는 것을 관찰함.';
+    expect(exp(t)).toBe(true);
+    expect(expMarks(t)).toEqual(['BTB', '관찰함']);
+  });
+  it('문헌으로 했을 수도 있지만 수행 동사가 있으면 실험·측정이다(교사가 정한 기준)', () => {
+    const s = '아가로스 젤 전기영동으로 DNA 조각을 크기별로 분리하는 탐구를 수행함.';
+    expect(exp(s)).toBe(true);
+    expect(expMarks(s)).toEqual(['전기영동']);
+    expect(exp('아가로스 젤 전기영동으로 DNA 조각을 크기별로 분리하는 원리를 탐구함.')).toBe(false);
+  });
+  it('제외 구간 안의 수행 동사는 조건부 표현을 살리지 못하고, 제외 구간 밖의 수행 동사는 살린다', () => {
+    const wish = '다음 실험에서는 거름종이 대신 실리카 판을 써서 직접 측정해 보고 싶다고 적음.';
+    expect(exp(wish)).toBe(false);
+    expect(expMarks(wish)).toEqual([]);
+    const job = '연구원이 하는 실험을 소개한 영상을 보고, 같은 방법으로 감자 즙의 카탈레이스 반응을 직접 확인함.';
+    expect(exp(job)).toBe(true);
+    expect(expMarks(job)).toEqual(['감자 즙']); // '연구원이 하는 실험'은 제외 구간이라 칠하지 않는다
+  });
+  it('수행 단서는 같은 문장의 조건부 표현만 살린다(앞뒤 문장으로 넘어가지 않는다)', () => {
+    const text = '현미경으로 양파 표피 세포를 관찰함. 현미경의 발달 과정을 조사함.';
+    const marks = methodMarks(text, M).filter((m) => m.key === 'experiment');
+    const second = text.indexOf('현미경의');
+    expect(marks.length).toBeGreaterThan(0);
+    expect(marks.every((m) => m.b <= second)).toBe(true);
+    expect(exp('현미경의 발달 과정을 조사함.')).toBe(false);
+  });
+  it('교사가 추가한 표현은 수행 단서 없이도 센다', () => {
+    const s = '전기영동이 생명 공학 연구에 쓰이는 사례를 정리함.';
+    expect(exp(s)).toBe(false);
+    const MU = compileMethods({ experiment: ['전기영동'] });
+    expect(exp(s, MU)).toBe(true);
+    const user = methodMarks(s, MU).filter((m) => m.user);
+    expect(user.map((m) => s.slice(m.a, m.b))).toEqual(['전기영동']);
+  });
+});
+
+describe('methodMarks와 methodHits는 문장마다 같은 판정을 낸다', () => {
+  const extra = [
+    '거름종이에 수성 사인펜 잉크를 찍고 끝을 물에 담가 색소가 퍼진 거리를 자로 재어 비교함.',
+    '반응물의 농도를 높이면 충돌 횟수가 늘어 반응 속도가 빨라지는 까닭을 설명함.',
+    '대조군을 두어야 하는 이유를 실험 설계의 원칙과 관련지어 정리함.',
+    '데이터 로거와 온도 센서를 연결하여 물이 식는 동안의 온도를 30초마다 기록함! 결과가 예상과 달랐을까? 그래프로 나타냄.',
+    '동물 실험의 윤리 문제를 두고 찬반 토론에 참여함.',
+  ].join(' ');
+  const texts = [...sampleStudent().seteuk.map((x) => x.text), ...sampleStudent().changche.map((x) => x.text), extra];
+  const keysIn = (marks: ReturnType<typeof methodMarks>, a: number, b: number): MethodKey[] => [
+    ...new Set(marks.filter((m) => m.a >= a && m.b <= b).map((m) => m.key)),
+  ];
+  const check = (ms: ReturnType<typeof compileMethods>): number => {
+    let n = 0;
+    for (const text of texts) {
+      const marks = methodMarks(text, ms);
+      // 모든 구간은 한 문장 안에 들어 있다
+      const ss = sentences(text);
+      for (const m of marks) expect(ss.some((o) => o.a <= m.a && m.b <= o.b)).toBe(true);
+      for (const o of ss) {
+        const want = [...methodHits(o.s, ms)].sort();
+        expect(keysIn(marks, o.a, o.b).sort(), o.s).toEqual(want);
+        n++;
+      }
+    }
+    return n;
+  };
+  it('기본 사전', () => {
+    expect(check(M)).toBeGreaterThan(150);
+  });
+  it('교사가 추가한 표현이 있을 때', () => {
+    expect(check(compileMethods({ experiment: ['전기영동', '거품 높이'], data: ['꺾은선그래프'] }))).toBeGreaterThan(150);
   });
 });

@@ -99,8 +99,12 @@ export function validPrefix(p: string, known: Set<string>): string[] | null {
   return res.length ? res : null;
 }
 
-/** 과목이 아닌 별도 세특의 줄머리: '자율적 교육과정 …', '학교자율과정 : …' */
-export const SELF_DIRECTED_HEAD = /^\s*(자율적\s*교육\s*과정|학교\s*자율\s*과정)\s*[:：]?\s*/;
+/**
+ * 과목이 아닌 별도 세특의 줄머리: '자율적 교육과정 …', '학교자율과정 : …'.
+ * 쌍점이 없으면 뒤에 띄어쓰기가 있어야 하고, '시간, 수업, 활동' 같은 말이 오면 머리로 보지 않는다.
+ * 본문이 줄바꿈되어 '학교자율과정에서 조사한 …', '학교자율과정 시간에 …'으로 시작하는 줄이 새 세특을 여는 것을 막는다.
+ */
+export const SELF_DIRECTED_HEAD = /^\s*(자율적\s*교육\s*과정|학교\s*자율\s*과정)(?:\s*[:：]\s*|\s+(?!(?:시간|수업|활동|과목|때|중)(?![가-힣])|(?:시간|수업|활동)에))/;
 
 /** 세특 본문 덩어리들을 과목별 세특으로 나눈다 */
 export function splitSeteuk(pending: PendingSeteuk[], known: Set<string>, lex?: JoinLexicon): { seteuk: Seteuk[]; warnings: string[] } {

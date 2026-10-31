@@ -480,12 +480,16 @@ describe('예시 학생: 상담 포인트 문장이 사실과 맞는다', () => 
     expect(q.t).toContain('2학년 생명과학에서 한');
     expect(q.t).toContain('2학년 대수 탐구로');
   });
-  it('관통 주제는 한 문장으로 합쳐지고, 진로 희망 문장 둘이 강점에 남는다', () => {
+  it('관통 주제는 한 문장으로 합쳐지고, 진로 희망 유지는 강점에, 진로 희망 분야 비율은 점검에 남는다', () => {
     const span = ins.filter((i) => i.tg === 's' && i.t.includes('교과군에서 이어집니다'));
     expect(span).toHaveLength(1);
     expect(span[0].t).toContain('‘카탈레이스’(');
     expect(span[0].t).toContain('‘항생제’(');
-    expect(t('진로 희망 분야(생명과학·바이오)')?.tg).toBe('s');
+    const share = t('진로 희망 분야(생명과학·바이오)')!;
+    expect(share.tg).toBe('g');
+    expect(share.t).toBe(
+      '진로 희망 분야(생명과학·바이오)와 맞닿은 탐구 기록은 29건 중 12건(41%)입니다. 비율만으로 판단하지 말고, 진로와 관련된 교과에서 탐구가 깊어졌는지도 함께 확인해 보세요.',
+    );
     expect(t('생명과학 연구원 → 미생물학 연구원으로 한 방향을 유지합니다')?.tg).toBe('s');
   });
   it('심화 예시는 직접 언급이 있는 연결부터 고른다', () => {

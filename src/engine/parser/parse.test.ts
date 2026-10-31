@@ -85,6 +85,20 @@ describe('splitSeteuk', () => {
       [['학교자율과정'], '두 번째 주제로 토양 산성도를 측정함.'],
     ]);
   });
+  it("본문이 줄바꿈되어 '학교자율과정에서', '학교자율과정 시간에'로 시작하는 줄은 새 세특을 열지 않는다", () => {
+    const { seteuk } = splitSeteuk([{
+      year: 2,
+      lines: [
+        '통합과학1: 1학년 때',
+        '학교자율과정에서 조사한 하천 수질 자료를 다시 분석함.',
+        '학교자율과정 시간에 만든 측정 계획도 보완함.',
+      ],
+    }], known);
+    expect(seteuk).toHaveLength(1);
+    expect(seteuk[0].names).toEqual(['통합과학1']);
+    expect(seteuk[0].text).toContain('학교자율과정에서 조사한');
+    expect(seteuk[0].text).toContain('학교자율과정 시간에 만든');
+  });
   it('여러 덩어리(쪽이 나뉜 세특)도 이어서 읽는다', () => {
     const { seteuk } = splitSeteuk([
       { year: 1, lines: ['통합과학1: 앞 쪽의 내용이며'] },

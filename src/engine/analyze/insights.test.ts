@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { GapReport, Insight, LaneKey, Link, MethodKey, Rec, Sem, StudentRecord, Theme, Year } from '../types';
 import { sampleStudent } from '../../fixtures/sample';
+import { sampleStudent2 } from '../../fixtures/sample2';
+import { analyze } from './index';
 import { buildRecords } from './records';
 import { analyzeRecord, buildCtx } from './depth';
 import { buildStats, buildThemes, keywordFn } from './themes';
@@ -179,7 +181,7 @@ describe('buildInsights: 예시 학생 + 손으로 그린 연결', () => {
     expect(rep!.t).toContain('통합사회1 → 통합사회2(기후변화)');
   });
 
-  it('관통 주제와 진로 희망 문장이 강점으로 들어간다', () => {
+  it('관통 주제와 진로 희망 유지 문장은 강점으로, 진로 희망 분야 비율은 점검으로 들어간다', () => {
     const ins = insNoGaps;
     // 관통 주제가 둘 이상이면 한 문장으로 합쳐지므로 강점 칸에 관통 주제 문장은 하나뿐이다
     const span = ins.filter((i) => i.tg === 's' && i.th && i.t.includes('교과군에서 이어집니다'));
@@ -188,7 +190,8 @@ describe('buildInsights: 예시 학생 + 손으로 그린 연결', () => {
     expect(span[0].t).toContain('‘카탈레이스’(');
     const hope = ins.find((i) => i.t.includes('진로 희망 분야(생명과학·바이오)'));
     expect(hope).toBeDefined();
-    expect(hope!.t).toMatch(/\d+건 중 \d+건\(\d+%\)/);
+    expect(hope!.tg).toBe('g');
+    expect(hope!.t).toMatch(/\d+건 중 \d+건\(\d+%\)입니다\. 비율만으로 판단하지 말고, 진로와 관련된 교과에서 탐구가 깊어졌는지도 함께 확인해 보세요\.$/);
     // 관통 주제를 한 문장으로 합쳤으므로 14개 상한에서도 진로 유지 문장이 밀리지 않는다
     expect(ins.some((i) => i.t.includes('한 방향을 유지합니다'))).toBe(true);
     const keep = buildInsights(recs, links, [], emptyGaps(), S).find((i) => i.t.includes('한 방향을 유지합니다'));
@@ -243,20 +246,54 @@ describe('buildInsights: 손으로 만든 경우', () => {
     expect(i2.some((i) => i.t.includes('바뀌었습니다'))).toBe(false);
   });
 
-  it('진로 희망 분야와 맞닿은 기록 비율: 40% 미만이면 방향', () => {
-    const recs = [
+  it('진로 희망 분야와 맞닿은 기록 비율은 높든 낮든 점검 한 줄이고, 강점이나 부족으로 판단하지 않는다', () => {
+    const S = emptyStudent();
+    S.hopes = [{ year: 1, text: '생명과학 연구원' }];
+    const find = (recs: Rec[]): Insight | undefined =>
+      buildInsights(recs, [], [], emptyGaps(), S).find((i) => i.t.includes('진로 희망 분야'));
+    // 비율이 낮을 때(33%)
+    const low = find([
       rec('A', { depth: 3, topic: '효소', fields: ['생명과학·바이오'] }),
       rec('B', { lane: '국어', depth: 2, topic: '광고', fields: ['미디어·콘텐츠'] }),
       rec('C', { lane: '사회', depth: 2, topic: '선거', fields: ['법·정치·행정'] }),
-    ];
-    const S = emptyStudent();
-    S.hopes = [{ year: 1, text: '생명과학 연구원' }];
-    const ins = buildInsights(recs, [], [], emptyGaps(), S);
-    const h = ins.find((i) => i.t.includes('진로 희망 분야'));
-    expect(h).toBeDefined();
-    expect(h!.tg).toBe('d');
-    expect(h!.t).toContain('3건 중 1건(33%)');
-    expect(h!.t).toContain('늘려 볼 여지');
+    ]);
+    expect(low).toBeDefined();
+    expect(low!.tg).toBe('g');
+    expect(low!.t).toBe(
+      '진로 희망 분야(생명과학·바이오)와 맞닿은 탐구 기록은 3건 중 1건(33%)입니다. 비율만으로 판단하지 말고, 진로와 관련된 교과에서 탐구가 깊어졌는지도 함께 확인해 보세요.',
+    );
+    // 비율이 높을 때(100%)도 같은 태그와 같은 꼴이다
+    const high = find([
+      rec('A', { depth: 3, topic: '효소', fields: ['생명과학·바이오'] }),
+      rec('B', { depth: 2, topic: '세포', fields: ['생명과학·바이오'] }),
+    ]);
+    expect(high).toBeDefined();
+    expect(high!.tg).toBe('g');
+    expect(high!.t).toBe(
+      '진로 희망 분야(생명과학·바이오)와 맞닿은 탐구 기록은 2건 중 2건(100%)입니다. 비율만으로 판단하지 말고, 진로와 관련된 교과에서 탐구가 깊어졌는지도 함께 확인해 보세요.',
+    );
+    for (const h of [low!, high!]) expect(h.t).not.toMatch(/늘려 볼 여지|강점|부족/);
+  });
+
+  it('점검 줄이 많아 점검 묶음이 꽉 차도 진로 희망 분야 비율 줄은 빠지지 않는다', () => {
+    // 두 번째 가상 학생에서 과학 기록의 실험·측정을 빼고 나머지 기록에는 개념 이해만 남기면
+    // 깊이 정체 둘, 방법 편중, 과학 기록에 실험·측정 없음, 반복 연결 줄이 생겨 점검 줄이 받을 자리보다 많아진다
+    const S = sampleStudent2();
+    const an = analyze(S);
+    const recs = an.recs.map((r) => ({
+      ...r,
+      methods: r.lane === '과학' ? r.methods.filter((k) => k !== 'experiment') : (['understanding'] as MethodKey[]),
+    }));
+    const ins = buildInsights(recs, an.links, an.themes, an.gaps, S);
+    const without = buildInsights(recs, an.links, an.themes, an.gaps, { ...S, hopes: [] });
+    expect(ins).toHaveLength(14);
+    const g = ins.filter((i) => i.tg === 'g').map((i) => i.t);
+    const gNo = without.filter((i) => i.tg === 'g').map((i) => i.t);
+    expect(gNo.length).toBeGreaterThanOrEqual(5);
+    // 진로 희망 줄이 들어오면 다른 점검 줄 하나가 밀려난다(묶음이 꽉 찼다는 뜻)
+    expect(gNo.some((t) => !g.includes(t))).toBe(true);
+    expect(g[0]).toMatch(/^진로 희망 분야\(/);
+    expect(g.filter((t) => t.includes('진로 희망 분야'))).toHaveLength(1);
   });
 
   it('아직 쓰지 않은 수준 3 방법을 방향으로 알려 준다', () => {

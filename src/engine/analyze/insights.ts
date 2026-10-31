@@ -9,6 +9,9 @@
  *     '관심 주제 N개가 …에서 이어집니다: ‘A’(교과군…), ‘B’(…).' 한 문장으로 합쳐 강점 칸이 비슷한 문장으로 차지 않게 한다(th는 첫 주제)
  *  s  가장 긴 계보: 뒤로 이어지는 연결이 없는 기록 가운데 앞으로 거슬러 올라가는 가장 긴 한 줄(같은 시기 연결은 빼고)이
  *     기록 3건 이상인 것. 조상 전체 수가 아니라 한 줄로 이어진 기록 수를 말한다
+ *  g  진로 희망 분야와 맞닿은 기록 비율: 비율과 상관없이 점검 한 줄. 비율이 높다고 강점, 낮다고 부족으로 판단하지 않고
+ *     진로와 관련된 교과에서 탐구가 깊어졌는지 함께 보라고 권한다. 희망 문구의 분야는 gaps.ts의 hopeFields로 판정.
+ *     점검 묶음에서 가장 먼저 만들어 점검 줄이 많아도 잘리지 않는다
  *  g  깊이 정체: 한 관심 주제의 기록이 4개 이상이고 주제 낱말이 둘 이상(또는 관심 분야 낱말)인데, 뒤 절반의 평균 깊이가
  *     앞 절반보다 늘지 않음(최대 2개). 앞이나 뒤 절반의 평균이 3.5 이상이면 이미 깊으므로 만들지 않는다
  *  g  방법 편중: gaps.ts의 methodBias(전체 6번 이상, 한 방법 30% 초과, 3단계 아님). 결손 분석과 같은 문장이므로 합칠 때 하나로 남는다
@@ -21,7 +24,6 @@
  *     '최근'은 학기 단위(Math.floor(t))로 본다. 학기 없는 창체(t=학년×2−1.5)가 있어도 같은 학년의 마지막 학기 세특이 최근이다
  *  s  심화 연결 수(예 2개: 직접 언급 > 공통 관심 주제 > 점수 순으로 고름), g 반복 연결 수(예 2개, 괄호에 관심 주제 이름),
  *  g  연결 4개 이상인데 심화가 없음
- *  s/d 진로 희망 분야와 맞닿은 기록 비율(40% 이상이면 강점, 아니면 방향). 희망 문구의 분야는 gaps.ts의 hopeFields로 판정
  *  s/q 진로 희망 변화: 분야가 같거나 문구가 비슷하면 유지(s), 아니면 바뀜(q)
  *  q  질문 2개: 가장 긴 계보의 끝 기록으로 바로 들어오는 연결(직접 언급이나 공통 관심 주제가 있는 것, 계보의 바로 앞 기록이 먼저)
  *     가운데 하나의 출발 기록과 끝 기록을 잇는 질문(그런 연결이 없으면 계보의 뿌리 기록), 연결이 하나도 없는 깊은 탐구의 계기를 묻는 질문.
@@ -166,6 +168,24 @@ export function buildInsights(recs: Rec[], links: Link[], themes: Theme[], gaps:
     });
   }
 
+  /* 진로 희망 분야와 맞닿은 기록 비율 */
+  const hopes = (S?.hopes ?? []).filter((h) => h && nos(h.text)).slice().sort((a, b) => a.year - b.year);
+  const hf: string[] = [];
+  for (const h of hopes) for (const k of hopeFields(h.text)) if (!hf.includes(k)) hf.push(k);
+  if (hf.length && real.length) {
+    const hit = real.filter((r) => (r.fields ?? []).some((f) => hf.includes(f.k))).length;
+    const share = hit / real.length;
+    // 비율이 높다고 강점, 낮다고 부족으로 보지 않는다. 진로와 거리가 있는 교과의 탐구도 그 자체로 의미가 있다.
+    // 비율과 상관없이 점검(g) 한 줄로 사실을 알리고, 진로와 관련된 교과에서 탐구가 깊어졌는지 함께 보게 한다.
+    // 점검 묶음의 첫 줄로 만들어, 다른 점검 줄이 많아도 최대 개수(MAX_INSIGHTS)에 밀려 빠지지 않게 한다
+    out.push({
+      tg: 'g',
+      t:
+        `진로 희망 분야(${hf.slice(0, 2).join(', ')})와 맞닿은 탐구 기록은 ${real.length}건 중 ${hit}건(${pct(share)}%)입니다. ` +
+        '비율만으로 판단하지 말고, 진로와 관련된 교과에서 탐구가 깊어졌는지도 함께 확인해 보세요.',
+    });
+  }
+
   /* 깊이 정체: 기록 4건 이상, 낱말이 둘 이상이거나 관심 분야 낱말인 주제만. 앞·뒤 절반 평균이 3.5 이상이면 이미 깊으니 내지 않는다 */
   let stag = 0;
   for (const th of ths) {
@@ -260,21 +280,6 @@ export function buildInsights(recs: Rec[], links: Link[], themes: Theme[], gaps:
   }
   if (lk.length >= 4 && !deepL.length) {
     out.push({ tg: 'g', t: '연결은 있지만 깊이가 올라간 ‘심화’ 연결이 없습니다. 관심은 이어지는데 탐구 수준이 그대로인지 확인해 보세요.' });
-  }
-
-  /* 진로 희망 분야와 맞닿은 기록 비율 */
-  const hopes = (S?.hopes ?? []).filter((h) => h && nos(h.text)).slice().sort((a, b) => a.year - b.year);
-  const hf: string[] = [];
-  for (const h of hopes) for (const k of hopeFields(h.text)) if (!hf.includes(k)) hf.push(k);
-  if (hf.length && real.length) {
-    const hit = real.filter((r) => (r.fields ?? []).some((f) => hf.includes(f.k))).length;
-    const share = hit / real.length;
-    out.push({
-      tg: share >= 0.4 ? 's' : 'd',
-      t:
-        `진로 희망 분야(${hf.slice(0, 2).join(', ')})와 맞닿은 탐구 기록이 ${real.length}건 중 ${hit}건(${pct(share)}%)입니다.` +
-        (share < 0.4 ? ' 진로와 연결된 탐구를 늘려 볼 여지가 있습니다.' : ''),
-    });
   }
 
   /* 진로 희망 변화 */
